@@ -56,10 +56,16 @@ const upload = multer({
     }
 });
 
-// Upload multiple files for a service request
-router.post('/service-documents', upload.array('documents', 10), async (req, res) => {
+// Upload multiple files for a service request (supports both separate and combined uploads)
+router.post('/service-documents', upload.fields([
+    { name: 'documents', maxCount: 10 },
+    { name: 'idCopy', maxCount: 1 },
+    { name: 'propertyProof', maxCount: 1 },
+    { name: 'sitePlan', maxCount: 1 },
+    { name: 'buildingPermit', maxCount: 1 }
+]), async (req, res) => {
     try {
-        if (!req.files || req.files.length === 0) {
+        if (!req.files || Object.keys(req.files).length === 0) {
             return res.status(400).json({
                 success: false,
                 error: 'No files uploaded'
@@ -67,17 +73,80 @@ router.post('/service-documents', upload.array('documents', 10), async (req, res
         }
 
         const ticketId = req.body.ticketId;
+        const documents = [];
 
-        // Generate document metadata with file paths
-        const documents = req.files.map((file, index) => ({
-            name: file.originalname,
-            storedName: file.filename,
-            path: `/uploads/${ticketId}/${file.filename}`,
-            size: file.size,
-            type: file.mimetype,
-            uploadedAt: new Date().toISOString(),
-            index: index
-        }));
+        // Handle separate document uploads (for new-service)
+        if (req.files.idCopy) {
+            const file = req.files.idCopy[0];
+            documents.push({
+                name: 'ID Copy',
+                originalName: file.originalname,
+                storedName: file.filename,
+                path: `/uploads/${ticketId}/${file.filename}`,
+                size: file.size,
+                type: file.mimetype,
+                uploadedAt: new Date().toISOString(),
+                documentType: 'idCopy'
+            });
+        }
+
+        if (req.files.propertyProof) {
+            const file = req.files.propertyProof[0];
+            documents.push({
+                name: 'Proof of Property Ownership/Lease',
+                originalName: file.originalname,
+                storedName: file.filename,
+                path: `/uploads/${ticketId}/${file.filename}`,
+                size: file.size,
+                type: file.mimetype,
+                uploadedAt: new Date().toISOString(),
+                documentType: 'propertyProof'
+            });
+        }
+
+        if (req.files.sitePlan) {
+            const file = req.files.sitePlan[0];
+            documents.push({
+                name: 'Site Plan',
+                originalName: file.originalname,
+                storedName: file.filename,
+                path: `/uploads/${ticketId}/${file.filename}`,
+                size: file.size,
+                type: file.mimetype,
+                uploadedAt: new Date().toISOString(),
+                documentType: 'sitePlan'
+            });
+        }
+
+        if (req.files.buildingPermit) {
+            const file = req.files.buildingPermit[0];
+            documents.push({
+                name: 'Building Permit',
+                originalName: file.originalname,
+                storedName: file.filename,
+                path: `/uploads/${ticketId}/${file.filename}`,
+                size: file.size,
+                type: file.mimetype,
+                uploadedAt: new Date().toISOString(),
+                documentType: 'buildingPermit'
+            });
+        }
+
+        // Handle combined document uploads (for other services)
+        if (req.files.documents) {
+            req.files.documents.forEach((file, index) => {
+                documents.push({
+                    name: file.originalname,
+                    originalName: file.originalname,
+                    storedName: file.filename,
+                    path: `/uploads/${ticketId}/${file.filename}`,
+                    size: file.size,
+                    type: file.mimetype,
+                    uploadedAt: new Date().toISOString(),
+                    index: index
+                });
+            });
+        }
 
         res.json({
             success: true,
