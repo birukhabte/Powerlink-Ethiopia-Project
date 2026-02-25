@@ -1,43 +1,23 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const pool = require('../config/database');
+const pool = require('../config/supabase-db');
 
 const router = express.Router();
 
 // Register endpoint
-// Register endpoint
 router.post('/register', async (req, res) => {
   try {
-    const { email, username, password, firstName, lastName, userType, bpNumber } = req.body;
+    const { email, username, password, firstName, lastName, userType, phone } = req.body;
 
-    // Determine unique checks
-    const conditions = [];
-    const values = [];
-    let paramCount = 1;
+    // Check if user already exists
+    const userExists = await pool.query(
+      'SELECT * FROM users WHERE email = $1 OR username = $2',
+      [email, username]
+    );
 
-    if (email) {
-      conditions.push(`email = $${paramCount++}`);
-      values.push(email);
-    }
-    if (username) {
-      conditions.push(`username = $${paramCount++}`);
-      values.push(username);
-    }
-    if (bpNumber) {
-      conditions.push(`bp_number = $${paramCount++}`);
-      values.push(bpNumber);
-    }
-
-    if (conditions.length > 0) {
-      const userExists = await pool.query(
-        `SELECT * FROM users WHERE ${conditions.join(' OR ')}`,
-        values
-      );
-
-      if (userExists.rows.length > 0) {
-        return res.status(400).json({ error: 'User already exists' });
-      }
+    if (userExists.rows.length > 0) {
+      return res.status(400).json({ error: 'User already exists' });
     }
 
     // Hash password
@@ -48,10 +28,9 @@ router.post('/register', async (req, res) => {
     const role = userType || 'customer';
 
     // Insert new user
-    // We need to handle optional email and bpNumber in the INSERT
     const newUser = await pool.query(
-      'INSERT INTO users (email, username, password_hash, first_name, last_name, role, bp_number) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, email, username, first_name, last_name, role, bp_number',
-      [email || null, username, passwordHash, firstName, lastName, role, bpNumber || null]
+      'INSERT INTO users (email, username, password_hash, first_name, last_name, role, phone) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, email, username, first_name, last_name, role',
+      [email, username, passwordHash, firstName, lastName, role, phone || null]
     );
 
     res.status(201).json({
@@ -68,11 +47,11 @@ router.post('/register', async (req, res) => {
 // Login endpoint
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body; // 'email' field holds the identifier (email/BP/username)
+    const { email, password } = req.body;
 
-    // Find user by email, bp_number, or username
+    // Find user by email or username
     const user = await pool.query(
-      'SELECT * FROM users WHERE email = $1 OR bp_number = $1 OR username = $1',
+      'SELECT * FROM users WHERE email = $1 OR username = $1',
       [email]
     );
 
