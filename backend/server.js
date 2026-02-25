@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 5000;
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
-  'https://your-frontend-url.vercel.app', // Replace with your actual frontend URL
+  'https://powerlinkethiopiasystem.vercel.app',
 ];
 
 app.use(cors({
