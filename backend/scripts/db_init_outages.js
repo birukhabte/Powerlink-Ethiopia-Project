@@ -31,7 +31,7 @@ const createOutagesTable = async () => {
             CREATE INDEX IF NOT EXISTS idx_outage_reports_created_at ON outage_reports(created_at);
             CREATE INDEX IF NOT EXISTS idx_outage_reports_location ON outage_reports(latitude, longitude);
             CREATE INDEX IF NOT EXISTS idx_outage_reports_urgency ON outage_reports(urgency);
-        `;
+        `;z
 
         await pool.query(query);
         console.log('✅ Outage_reports table created successfully!');
