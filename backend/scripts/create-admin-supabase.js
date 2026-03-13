@@ -1,12 +1,13 @@
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
 const pool = new Pool({
-  host: 'aws-1-eu-west-1.pooler.supabase.com',
-  port: 6543,
-  database: 'postgres',
-  user: 'postgres.dzgqffcebxrsbjyiitij',
-  password: 'k7jeoEeP5iNBVefP',
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
   ssl: false
 });
 
