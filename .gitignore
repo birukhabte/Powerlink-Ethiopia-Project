@@ -25,5 +25,6 @@ Thumbs.db
 *.swp
 *.swo
 
-# Uploads (optional - uncomment if you don't want to track uploads)
-# backend/uploads/
+# Uploads - ignore all uploaded files but keep directory structure
+backend/uploads/*
+!backend/uploads/.gitkeep
