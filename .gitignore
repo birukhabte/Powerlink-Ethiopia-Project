@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 */node_modules/
+**/node_modules/
+frontend/vite-project/node_modules/
+backend/node_modules/
 
 # Environment files
 .env
@@ -28,3 +31,11 @@ Thumbs.db
 # Uploads - ignore all uploaded files but keep directory structure
 backend/uploads/*
 !backend/uploads/.gitkeep
+
+# Package lock files (optional - uncomment if you want to ignore them)
+# package-lock.json
+# */package-lock.json
+
+# Temporary files
+*.tmp
+*.temp
