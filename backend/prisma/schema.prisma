@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id             Int      @id @default(autoincrement())
+  email          String   @unique @db.VarChar(255)
+  username       String   @unique @db.VarChar(100)
+  password_hash  String   @db.VarChar(255)
+  first_name     String?  @db.VarChar(100)
+  last_name      String?  @db.VarChar(100)
+  role           String   @default("customer") @db.VarChar(50)
+  phone          String?  @db.VarChar(20)
+  address        String?
+  is_active      Boolean  @default(true)
+  email_verified Boolean  @default(false)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @default(now()) @updatedAt
+
+  announcements    Announcement[]   @relation("AnnouncementCreatedBy")
+  outagesReported  OutageReport[]   @relation("OutageReportedBy")
+  outagesAssigned  OutageReport[]   @relation("OutageAssignedTo")
+  requestsCreated  ServiceRequest[] @relation("ServiceRequestCreatedBy")
+  requestsAssigned ServiceRequest[] @relation("ServiceRequestAssignedTo")
+
+  @@map("users")
+}
+
+model Announcement {
+  id         Int       @id @default(autoincrement())
+  title      String    @db.VarChar(255)
+  content    String
+  type       String    @default("info") @db.VarChar(50)
+  priority   Int       @default(1)
+  is_active  Boolean   @default(true)
+  created_by Int?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now()) @updatedAt
+  expires_at DateTime?
+
+  creator User? @relation("AnnouncementCreatedBy", fields: [created_by], references: [id], onDelete: SetNull)
+
+  @@map("announcement1")
+}
+
+model OutageReport {
+  id                 Int      @id @default(autoincrement())
+  title              String   @db.VarChar(255)
+  description        String
+  outage_type        String   @db.VarChar(100)
+  urgency            String   @default("medium") @db.VarChar(50)
+  status             String   @default("pending") @db.VarChar(50)
+  latitude           Decimal? @db.Decimal(10, 8)
+  longitude          Decimal? @db.Decimal(11, 8)
+  address            String?
+  estimated_affected String?  @db.VarChar(100)
+  reason             String?
+  technician_notes   String?
+  reported_by        Int?
+  assigned_to        Int?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @default(now()) @updatedAt
+
+  reporter User? @relation("OutageReportedBy", fields: [reported_by], references: [id], onDelete: SetNull)
+  assignee User? @relation("OutageAssignedTo", fields: [assigned_to], references: [id], onDelete: SetNull)
+
+  @@map("outage_reports")
+}
+
+model ServiceRequest {
+  id               Int      @id @default(autoincrement())
+  ticket_id        String   @unique @db.VarChar(50)
+  service_type     String   @db.VarChar(100)
+  full_name        String   @db.VarChar(255)
+  phone            String   @db.VarChar(20)
+  city             String?  @db.VarChar(100)
+  woreda           String?  @db.VarChar(100)
+  kebele           String?  @db.VarChar(100)
+  house_plot_number String? @db.VarChar(100)
+  nearby_landmark  String?  @db.VarChar(255)
+  full_address     String
+  documents        Json?
+  status           String   @default("pending") @db.VarChar(50)
+  priority         String   @default("medium") @db.VarChar(50)
+  assigned_to      Int?
+  supervisor_notes String?
+  created_by       Int?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @default(now()) @updatedAt
+
+  creator  User? @relation("ServiceRequestCreatedBy", fields: [created_by], references: [id], onDelete: SetNull)
+  assignee User? @relation("ServiceRequestAssignedTo", fields: [assigned_to], references: [id], onDelete: SetNull)
+
+  @@map("service_requests")
+}
