@@ -7,6 +7,16 @@ delete require.cache[require.resolve('dotenv')];
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
+const http = require('http');
+const { Server } = require('socket.io');
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*", // Adjust in production
+    methods: ["GET", "POST"]
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 
 // Middleware
@@ -67,7 +77,10 @@ app.get('/', (req, res) => {
       users: '/api/users',
       outages: '/api/outages',
       serviceRequests: '/api/service-requests',
-      uploads: '/api/uploads'
+      uploads: '/api/uploads',
+      messages: '/api/messages',
+      notifications: '/api/notifications',
+      schedule: '/api/schedule'
     }
   });
 });
@@ -84,7 +97,28 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/outages', require('./routes/outages'));
 app.use('/api/service-requests', require('./routes/service-requests'));
 app.use('/api/uploads', require('./routes/uploads'));
+app.use('/api/messages', require('./routes/messages'));
+app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/schedule', require('./routes/schedule'));
 
-app.listen(PORT, () => {
+// Socket.io
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+
+  socket.on('user_joined', (userId) => {
+    socket.join(`user-${userId}`);
+    console.log(`User ${userId} joined their room`);
+  });
+
+  socket.on('send_message', (message) => {
+    io.to(`user-${message.receiver_id}`).emit('receive_message', message);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected');
+  });
+});
+
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

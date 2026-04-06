@@ -23,6 +23,8 @@ const SupervisorSidebar = () => {
         { icon: <BarChart />, label: 'Team Performance', path: '/supervisor/performance' },
         { icon: <MessageSquare />, label: 'Chat', path: '/supervisor/chat' },
         { icon: <Bell />, label: 'Notifications', path: '/supervisor/notifications' },
+        { icon: <History />, label: 'History', path: '/supervisor/history' },
+        { icon: <Users />, label: 'Profile', path: '/supervisor/profile' },
     ];
 
     const handleLogout = () => {

@@ -22,6 +22,9 @@ const TechnicianSidebar = () => {
         { icon: <Clock />, label: 'Schedule', path: '/technician/schedule' },
         { icon: <MessageSquare />, label: 'Chats', path: '/technician/chat' },
         { icon: <Bell />, label: 'Updates', path: '/technician/updates' },
+        { icon: <History />, label: 'History', path: '/technician/history' },
+        { icon: <Bell />, label: 'Notifications', path: '/technician/notifications' },
+        { icon: <UserCircle />, label: 'Profile', path: '/technician/profile' },
     ];
 
     const handleLogout = () => {

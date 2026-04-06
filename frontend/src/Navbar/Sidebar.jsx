@@ -27,9 +27,9 @@ const Sidebar = ({ setShowOutageForm, setShowMap, showOutageForm, showMap }) => 
         { icon: <FileText />, label: 'Report Outage', onClick: () => { if (location.pathname !== '/dashboard') navigate('/dashboard'); setTimeout(() => setShowOutageForm && setShowOutageForm(true), 100); }, isActive: showOutageForm },
         { icon: <FileText />, label: 'Track Ticket', path: '/ticket' },
         { icon: <Zap />, label: 'Request Service', path: '/request-service' },
-        { icon: <History />, label: 'History', path: '/history' },
-        { icon: <Bell />, label: 'Notifications', path: '/notifications' },
-        { icon: <User />, label: 'Profile', path: '/profile' },
+        { icon: <History />, label: 'History', path: '/customer/history' },
+        { icon: <Bell />, label: 'Notifications', path: '/customer/notifications' },
+        { icon: <User />, label: 'Profile', path: '/customer/profile' },
     ];
 
     const adminMenuItems = [
@@ -39,6 +39,9 @@ const Sidebar = ({ setShowOutageForm, setShowMap, showOutageForm, showMap }) => 
         { icon: <Bell />, label: 'Notices & Alerts', path: '/admin/notices' },
         { icon: <UserPlus />, label: 'Register Staff', path: '/admin/register-staff' },
         { icon: <MessageSquare />, label: 'Chat', path: '/admin/chat' },
+        { icon: <History />, label: 'History', path: '/admin/history' },
+        { icon: <Bell />, label: 'Notifications', path: '/admin/notifications' },
+        { icon: <User />, label: 'Profile', path: '/admin/profile' },
         { icon: <Settings />, label: 'System Settings', path: '/admin/settings' },
     ];
 

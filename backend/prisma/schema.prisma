@@ -1,9 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
+  engineType = "library"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -26,6 +28,10 @@ model User {
   outagesAssigned  OutageReport[]   @relation("OutageAssignedTo")
   requestsCreated  ServiceRequest[] @relation("ServiceRequestCreatedBy")
   requestsAssigned ServiceRequest[] @relation("ServiceRequestAssignedTo")
+
+  notifications    Notification[]   @relation("UserNotification")
+  messagesSent     Message[]        @relation("MessageSender")
+  messagesReceived Message[]        @relation("MessageReceiver")
 
   @@map("users")
 }
@@ -62,6 +68,7 @@ model OutageReport {
   technician_notes   String?
   reported_by        Int?
   assigned_to        Int?
+  scheduled_date     DateTime?
   created_at         DateTime @default(now())
   updated_at         DateTime @default(now()) @updatedAt
 
@@ -89,6 +96,7 @@ model ServiceRequest {
   assigned_to      Int?
   supervisor_notes String?
   created_by       Int?
+  scheduled_date   DateTime?
   created_at       DateTime @default(now())
   updated_at       DateTime @default(now()) @updatedAt
 
@@ -96,4 +104,32 @@ model ServiceRequest {
   assignee User? @relation("ServiceRequestAssignedTo", fields: [assigned_to], references: [id], onDelete: SetNull)
 
   @@map("service_requests")
+}
+
+model Message {
+  id          Int      @id @default(autoincrement())
+  sender_id   Int
+  receiver_id Int
+  content     String
+  is_read     Boolean  @default(false)
+  created_at  DateTime @default(now())
+
+  sender   User @relation("MessageSender", fields: [sender_id], references: [id])
+  receiver User @relation("MessageReceiver", fields: [receiver_id], references: [id])
+
+  @@map("messages")
+}
+
+model Notification {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  title      String   @db.VarChar(255)
+  message    String
+  type       String   @default("info") @db.VarChar(50)
+  is_read    Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  user User @relation("UserNotification", fields: [user_id], references: [id])
+
+  @@map("notifications")
 }
