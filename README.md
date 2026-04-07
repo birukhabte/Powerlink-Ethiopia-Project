@@ -1,6 +1,6 @@
 # PowerLink Ethiopia
 
-A digital platform for managing electricity services, outage reporting, and service requests in Ethiopia. yilkal
+A digital platform for managing electricity services, outage reporting, and service requests in Ethiopia. yilkal bewuketu
 
 ## Features
 

@@ -1,10 +1,11 @@
 const express = require('express');
 const pool = require('../config/database');
 
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
 // Get all service requests (for supervisor)
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -58,7 +59,7 @@ router.get('/', async (req, res) => {
 });
 
 // Get pending service requests only
-router.get('/pending', async (req, res) => {
+router.get('/pending', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -130,7 +131,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Get service requests by user ID
-router.get('/user/:userId', async (req, res) => {
+router.get('/user/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
 
