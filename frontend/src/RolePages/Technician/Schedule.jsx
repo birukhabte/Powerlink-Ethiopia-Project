@@ -96,7 +96,7 @@ const Schedule = () => {
                         <Info className="text-blue-600" size={20} />
                         Task Details
                     </h2>
-                    
+
                     {selectedEvent ? (
                         <div className="space-y-6">
                             <div>
@@ -144,13 +144,13 @@ const Schedule = () => {
                             </div>
 
                             <div className="pt-6 border-t border-gray-100">
-                                <button 
+                                <button
                                     className="w-full bg-blue-600 text-white rounded-xl py-3 font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-2 mb-3"
                                     onClick={() => alert('Feature coming soon: Updating status')}
                                 >
                                     <Clock size={18} /> Update Status
                                 </button>
-                                <button 
+                                <button
                                     className="w-full bg-gray-50 text-gray-600 rounded-xl py-3 font-bold hover:bg-gray-100 transition-all"
                                     onClick={() => setSelectedEvent(null)}
                                 >
@@ -161,7 +161,7 @@ const Schedule = () => {
                     ) : (
                         <div className="flex flex-col items-center justify-center text-center p-10 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
                             <Calendar className="text-gray-300 mb-4" size={48} strokeWidth={1} />
-                            <p className="text-gray-500 font-medium">Select a task from the calendar to view its details.</p>
+                            <p className="text-gray-500 font-medium">Select a task from the calendar to view its detail.</p>
                         </div>
                     )}
                 </div>
@@ -173,10 +173,10 @@ const Schedule = () => {
                     </div>
                     <div className="space-y-3">
                         {events.slice(0, 2).map((evt, idx) => (
-                           <div key={idx} className="bg-white/10 p-3 rounded-lg backdrop-blur-md">
-                               <div className="text-xs font-bold text-blue-100 uppercase opacity-75">{new Date(evt.start).toDateString()}</div>
-                               <div className="font-bold truncate">{evt.title}</div>
-                           </div>
+                            <div key={idx} className="bg-white/10 p-3 rounded-lg backdrop-blur-md">
+                                <div className="text-xs font-bold text-blue-100 uppercase opacity-75">{new Date(evt.start).toDateString()}</div>
+                                <div className="font-bold truncate">{evt.title}</div>
+                            </div>
                         ))}
                     </div>
                 </div>
