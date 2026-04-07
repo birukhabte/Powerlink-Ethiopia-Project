@@ -99,6 +99,7 @@ app.use('/api/service-requests', require('./routes/service-requests'));
 app.use('/api/uploads', require('./routes/uploads'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/schedule', require('./routes/schedule'));
 
 // Socket.io

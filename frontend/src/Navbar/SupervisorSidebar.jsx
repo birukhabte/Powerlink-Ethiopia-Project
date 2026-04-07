@@ -8,7 +8,8 @@ import {
     LogOut,
     Eye,
     Bell,
-    MessageSquare
+    MessageSquare,
+    History
 } from 'lucide-react';
 
 const SupervisorSidebar = () => {

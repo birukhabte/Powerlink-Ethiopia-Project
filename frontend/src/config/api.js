@@ -40,6 +40,10 @@ export const API_ENDPOINTS = {
     updateRole: (userId) => `${API_BASE_URL}/api/users/${userId}/role`,
   },
   
+  dashboard: {
+    technician: `${API_BASE_URL}/api/dashboard/technician`,
+    supervisor: `${API_BASE_URL}/api/dashboard/supervisor`,
+  },
   // Uploads
   uploads: {
     serviceDocuments: `${API_BASE_URL}/api/uploads/service-documents`,

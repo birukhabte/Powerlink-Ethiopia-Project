@@ -8,7 +8,8 @@ import {
     Clock,
     LogOut,
     UserCircle,
-    Bell
+    Bell,
+    History
 } from 'lucide-react';
 
 const TechnicianSidebar = () => {
