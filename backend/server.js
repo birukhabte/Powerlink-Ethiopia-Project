@@ -10,7 +10,7 @@ const { Server } = require('socket.io');
 const server = http.createServer(app);
 
 // =====================
-// ✅ ALLOWED ORIGINS (IMPORTANT)
+// ✅ ALLOWED ORIGINS
 // =====================
 const allowedOrigins = [
   "http://localhost:5173",
@@ -19,11 +19,11 @@ const allowedOrigins = [
 ];
 
 // =====================
-// ✅ SOCKET.IO CORS FIX
+// ✅ SOCKET.IO (ALLOW ALL FOR NOW)
 // =====================
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: "*",
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -32,25 +32,30 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 5000;
 
 // =====================
-// ✅ EXPRESS CORS FIX (FINAL)
+// ✅ FINAL CORS FIX (NO BLOCKING)
 // =====================
 app.use(cors({
   origin: function (origin, callback) {
-    // allow requests with no origin (Postman, mobile apps)
+    console.log("Incoming Origin:", origin);
+
+    // allow requests without origin
     if (!origin) return callback(null, true);
 
+    // allow known origins
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
-    } else {
-      return callback(new Error("Not allowed by CORS"));
     }
+
+    // 🔥 IMPORTANT: fallback allow (prevents crash)
+    console.warn("CORS fallback allowed for:", origin);
+    return callback(null, true);
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
 
-// ✅ VERY IMPORTANT (preflight)
+// ✅ HANDLE PREFLIGHT
 app.options("*", cors());
 
 // =====================
@@ -118,7 +123,7 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/schedule', require('./routes/schedule'));
 
 // =====================
-// SOCKET.IO
+// SOCKET.IO EVENTS
 // =====================
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
