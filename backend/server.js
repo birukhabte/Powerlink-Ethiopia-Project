@@ -9,14 +9,21 @@ const http = require('http');
 const { Server } = require('socket.io');
 const server = http.createServer(app);
 
-const FRONTEND_URL = "https://industrial-project-xi.vercel.app";
+// =====================
+// ✅ ALLOWED ORIGINS (IMPORTANT)
+// =====================
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "https://industrial-project-xi.vercel.app"
+];
 
 // =====================
 // ✅ SOCKET.IO CORS FIX
 // =====================
 const io = new Server(server, {
   cors: {
-    origin: FRONTEND_URL,
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -28,13 +35,22 @@ const PORT = process.env.PORT || 5000;
 // ✅ EXPRESS CORS FIX (FINAL)
 // =====================
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: function (origin, callback) {
+    // allow requests with no origin (Postman, mobile apps)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error("Not allowed by CORS"));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
 
-// ✅ VERY IMPORTANT (handles preflight requests)
+// ✅ VERY IMPORTANT (preflight)
 app.options("*", cors());
 
 // =====================
@@ -43,7 +59,9 @@ app.options("*", cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files
+// =====================
+// STATIC FILES
+// =====================
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // =====================
@@ -119,10 +137,10 @@ io.on('connection', (socket) => {
 });
 
 // =====================
-// GLOBAL ERROR HANDLER (IMPORTANT)
+// GLOBAL ERROR HANDLER
 // =====================
 app.use((err, req, res, next) => {
-  console.error("GLOBAL ERROR:", err);
+  console.error("GLOBAL ERROR:", err.message);
   res.status(500).json({
     message: "Internal server error",
     error: err.message
