@@ -37,7 +37,8 @@ export const API_ENDPOINTS = {
   // Users
   users: {
     base: `${API_BASE_URL}/api/users`,
-    updateRole: (userId) => `${API_BASE_URL}/api/users/${userId}/role`,
+    updateRole: (userId) =>
+  `${API_BASE_URL}/api/users/update-role/${userId}`,
   },
   
   dashboard: {
