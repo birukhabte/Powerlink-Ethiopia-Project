@@ -1,4 +1,4 @@
-# PowerLink Ethiopia
+# PowerLink Ethiopia yaya
 
 A digital platform for managing electricity services, outage reporting, and service requests in Ethiopia. yilkal bewuketu
 
