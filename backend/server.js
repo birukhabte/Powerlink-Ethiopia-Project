@@ -10,7 +10,7 @@ const { Server } = require('socket.io');
 const server = http.createServer(app);
 
 // =====================
-// ✅ ALLOWED ORIGINS
+// ALLOWED ORIGINS
 // =====================
 const allowedOrigins = [
   "http://localhost:5173",
@@ -19,44 +19,42 @@ const allowedOrigins = [
 ];
 
 // =====================
-// ✅ SOCKET.IO (ALLOW ALL FOR NOW)
+// CORS CONFIG (FIXED)
 // =====================
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-    credentials: true
-  }
-});
-
-const PORT = process.env.PORT || 5000;
-
-// =====================
-// ✅ FINAL CORS FIX (NO BLOCKING)
-// =====================
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
     console.log("Incoming Origin:", origin);
 
-    // allow requests without origin
     if (!origin) return callback(null, true);
 
-    // allow known origins
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
 
-    // 🔥 IMPORTANT: fallback allow (prevents crash)
     console.warn("CORS fallback allowed for:", origin);
     return callback(null, true);
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true
-}));
 
-// ✅ HANDLE PREFLIGHT
-app.options("*", cors());
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+  credentials: true
+};
+
+// Apply CORS
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
+
+// =====================
+// SOCKET.IO
+// =====================
+const io = new Server(server, {
+  cors: corsOptions
+});
+
+// =====================
+// PORT
+// =====================
+const PORT = process.env.PORT || 5000;
 
 // =====================
 // MIDDLEWARE
@@ -64,25 +62,27 @@ app.options("*", cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// =====================
-// STATIC FILES
-// =====================
+// Static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // =====================
-// DATABASE TEST
+// DATABASE
 // =====================
 const pool = require('./config/database');
 
+// Test DB
 app.get('/api/test', async (req, res) => {
   try {
     const result = await pool.query('SELECT NOW()');
+
     res.json({
       message: 'Database connected successfully!',
       timestamp: result.rows[0].now
     });
+
   } catch (error) {
     console.error(error);
+
     res.status(500).json({
       error: 'Database connection failed',
       details: error.message
@@ -91,7 +91,7 @@ app.get('/api/test', async (req, res) => {
 });
 
 // =====================
-// ROOT ROUTE
+// ROOT
 // =====================
 app.get('/', (req, res) => {
   res.json({
@@ -123,7 +123,7 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/schedule', require('./routes/schedule'));
 
 // =====================
-// SOCKET.IO EVENTS
+// SOCKET EVENTS
 // =====================
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
@@ -138,17 +138,6 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('User disconnected');
-  });
-});
-
-// =====================
-// GLOBAL ERROR HANDLER
-// =====================
-app.use((err, req, res, next) => {
-  console.error("GLOBAL ERROR:", err.message);
-  res.status(500).json({
-    message: "Internal server error",
-    error: err.message
   });
 });
 
