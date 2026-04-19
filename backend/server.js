@@ -9,44 +9,80 @@ const http = require('http');
 const { Server } = require('socket.io');
 const server = http.createServer(app);
 
-// ✅ FINAL SOCKET.IO FIX
+// =====================
+// ALLOWED ORIGINS
+// =====================
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "https://industrial-project-xi.vercel.app"
+];
+
+// =====================
+// CORS CONFIG (FIXED)
+// =====================
+const corsOptions = {
+  origin: function (origin, callback) {
+    console.log("Incoming Origin:", origin);
+
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    console.warn("CORS fallback allowed for:", origin);
+    return callback(null, true);
+  },
+
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+  credentials: true
+};
+
+// Apply CORS
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
+
+// =====================
+// SOCKET.IO
+// =====================
 const io = new Server(server, {
-  cors: {
-    origin: "https://industrial-project-xi.vercel.app",
-    methods: ["GET", "POST"],
-    credentials: true
-  }
+  cors: corsOptions
 });
 
+// =====================
+// PORT
+// =====================
 const PORT = process.env.PORT || 5000;
 
 // =====================
-// ✅ FINAL CORS FIX
+// MIDDLEWARE
 // =====================
-app.use(cors({
-  origin: "https://industrial-project-xi.vercel.app",
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  credentials: true
-}));
-
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Serve static files
+// Static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // =====================
-// TEST DB
+// DATABASE
 // =====================
 const pool = require('./config/database');
 
+// Test DB
 app.get('/api/test', async (req, res) => {
   try {
     const result = await pool.query('SELECT NOW()');
+
     res.json({
       message: 'Database connected successfully!',
       timestamp: result.rows[0].now
     });
+
   } catch (error) {
+    console.error(error);
+
     res.status(500).json({
       error: 'Database connection failed',
       details: error.message
@@ -55,7 +91,7 @@ app.get('/api/test', async (req, res) => {
 });
 
 // =====================
-// ROOT ROUTE
+// ROOT
 // =====================
 app.get('/', (req, res) => {
   res.json({
@@ -87,7 +123,7 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/schedule', require('./routes/schedule'));
 
 // =====================
-// SOCKET.IO
+// SOCKET EVENTS
 // =====================
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
