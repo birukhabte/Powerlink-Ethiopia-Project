@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import {
     UserPlus,
     Wrench,
@@ -6,151 +7,100 @@ import {
     MapPin,
     Calendar,
     Upload,
-    Tag,
     Building,
     Mail,
     Phone,
     Key,
     Briefcase,
     CheckCircle,
-    Clock,
-    X
+    X,
+    Loader2,
+    AlertCircle
 } from 'lucide-react';
+import { API_ENDPOINTS } from '../../config/api';
 
 const StaffRegister = () => {
     const [step, setStep] = useState(1);
     const [staffType, setStaffType] = useState('technician');
     const [submitted, setSubmitted] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
 
     const [formData, setFormData] = useState({
-        // Personal Information
         fullName: '',
         email: '',
         phone: '',
         address: '',
-
-        // Employee Information
-        employeeType: 'technician',
         department: '',
         position: '',
-
-        // Work Details
-        workZones: [],
-        skills: [],
-        schedule: {
-            start: '08:00',
-            end: '17:00',
-            days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-        },
-
-        // Credentials
         username: '',
-        temporaryPassword: '',
-
-        // Documents
-        documents: []
+        password: '',
     });
 
     const departments = ['Field Operations', 'Maintenance', 'Customer Service', 'Technical Support', 'Management'];
 
-    const workZonesOptions = [
-        'Addis Ababa Central', 'Addis Ababa East', 'Addis Ababa West',
-        'Bole Area', 'Megenagna', 'Kirkos', 'Gurd Shola',
-        'Bahir Dar', 'Hawassa', 'Dire Dawa', 'Mekelle'
-    ];
-
-    const skillsOptions = [
-        'Transformer Repair', 'Line Maintenance', 'Meter Installation',
-        'GIS Mapping', 'Emergency Response', 'Customer Service',
-        'Technical Training', 'Safety Inspection', 'Equipment Testing'
-    ];
-
-    const daysOptions = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        setLoading(true);
+        setError(null);
 
-        // Generate employee ID
-        const prefix = staffType === 'technician' ? 'TECH' : 'SUP';
-        const randomNum = Math.floor(100 + Math.random() * 900);
-        const employeeId = `${prefix}-${randomNum}`;
+        try {
+            const token = localStorage.getItem('token');
+            const [firstName, ...lastParts] = formData.fullName.split(' ');
+            const lastName = lastParts.join(' ') || firstName;
 
-        // Generate temporary password
-        const tempPassword = Math.random().toString(36).slice(-8);
+            const registrationData = {
+                email: formData.email,
+                username: formData.username,
+                password: formData.password,
+                firstName: firstName,
+                lastName: lastName,
+                role: staffType,
+                phone: formData.phone,
+                department: formData.department,
+                position: formData.position
+            };
 
-        // Update form data with generated credentials
-        const finalData = {
-            ...formData,
-            employeeId,
-            temporaryPassword: tempPassword,
-            status: 'pending'
-        };
+            const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/admin/register-staff`, registrationData, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-        console.log('Staff registered:', finalData);
-
-        // Show success message
-        setSubmitted({
-            employeeId,
-            temporaryPassword: tempPassword,
-            staffType: staffType === 'technician' ? 'Technician' : 'Supervisor'
-        });
-    };
-
-    const handleFileUpload = (e) => {
-        const files = Array.from(e.target.files);
-        setFormData({
-            ...formData,
-            documents: [...formData.documents, ...files]
-        });
-    };
-
-    const toggleZone = (zone) => {
-        const zones = formData.workZones.includes(zone)
-            ? formData.workZones.filter(z => z !== zone)
-            : [...formData.workZones, zone];
-        setFormData({ ...formData, workZones: zones });
-    };
-
-    const toggleSkill = (skill) => {
-        const skills = formData.skills.includes(skill)
-            ? formData.skills.filter(s => s !== skill)
-            : [...formData.skills, skill];
-        setFormData({ ...formData, skills: skills });
-    };
-
-    const toggleDay = (day) => {
-        const days = formData.schedule.days.includes(day)
-            ? formData.schedule.days.filter(d => d !== day)
-            : [...formData.schedule.days, day];
-        setFormData({
-            ...formData,
-            schedule: { ...formData.schedule, days }
-        });
+            if (response.data.success) {
+                setSubmitted({
+                    employeeId: response.data.user.id,
+                    username: response.data.user.username,
+                    staffType: staffType === 'technician' ? 'Technician' : 'Supervisor'
+                });
+            }
+        } catch (err) {
+            console.error('Registration error:', err);
+            setError(err.response?.data?.error || 'Failed to register staff member.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (submitted) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-                <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
-                    <CheckCircle className="mx-auto text-green-500 mb-4" size={64} />
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Staff Registered Successfully!</h2>
+            <div className="min-h-[calc(100vh-100px)] flex items-center justify-center p-6">
+                <div className="bg-white rounded-[2rem] shadow-2xl p-10 max-w-md text-center border border-gray-100">
+                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <CheckCircle className="text-green-600" size={40} />
+                    </div>
+                    <h2 className="text-3xl font-black text-gray-900 mb-2">Registration Complete</h2>
+                    <p className="text-gray-500 font-medium mb-8">The new staff member has been successfully added to the system.</p>
 
-                    <div className="bg-blue-50 p-6 rounded-lg mb-6">
-                        <div className="text-left space-y-3">
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Employee ID:</span>
-                                <span className="font-bold">{submitted.employeeId}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Role:</span>
-                                <span className="font-bold">{submitted.staffType}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Temporary Password:</span>
-                                <span className="font-bold text-red-600">{submitted.temporaryPassword}</span>
-                            </div>
+                    <div className="bg-gray-50 p-6 rounded-2xl mb-8 border border-gray-100 text-left space-y-4">
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Username</span>
+                            <span className="font-bold text-gray-900">{submitted.username}</span>
                         </div>
-                        <p className="text-sm text-gray-600 mt-4">Credentials have been sent to {formData.email}</p>
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Role</span>
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${staffType === 'technician' ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700'}`}>
+                                {submitted.staffType}
+                            </span>
+                        </div>
                     </div>
 
                     <button
@@ -159,14 +109,12 @@ const StaffRegister = () => {
                             setStep(1);
                             setFormData({
                                 fullName: '', email: '', phone: '', address: '',
-                                employeeType: 'technician', department: '', position: '',
-                                workZones: [], skills: [], schedule: { start: '08:00', end: '17:00', days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
-                                username: '', temporaryPassword: '', documents: []
+                                department: '', position: '', username: '', password: ''
                             });
                         }}
-                        className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all"
                     >
-                        Register Another Staff
+                        Register Another
                     </button>
                 </div>
             </div>
@@ -174,228 +122,136 @@ const StaffRegister = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-            <div className="max-w-2xl mx-auto">
-                {/* Header */}
-                <div className="mb-8 text-center">
-                    <UserPlus className="mx-auto text-blue-600 mb-4" size={48} />
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2">Register Staff Member</h1>
-                    <p className="text-gray-600">Add new technicians and supervisors to the system</p>
+        <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
+            {/* Header */}
+            <div className="text-center">
+                <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-2">Staff Acquisition</h1>
+                <p className="text-gray-500 font-medium">Onboard new technicians and operations supervisors.</p>
+            </div>
+
+            {step === 1 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <button
+                        onClick={() => { setStaffType('technician'); setStep(2); }}
+                        className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100 hover:shadow-xl hover:border-blue-200 transition-all group text-left"
+                    >
+                        <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                            <Wrench size={32} />
+                        </div>
+                        <h3 className="text-2xl font-black text-gray-900 mb-2">Field Technician</h3>
+                        <p className="text-gray-500 font-medium leading-relaxed">Responsible for outage repairs, meter installations, and maintenance tasks.</p>
+                    </button>
+
+                    <button
+                        onClick={() => { setStaffType('supervisor'); setStep(2); }}
+                        className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100 hover:shadow-xl hover:border-purple-200 transition-all group text-left"
+                    >
+                        <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                            <Shield size={32} />
+                        </div>
+                        <h3 className="text-2xl font-black text-gray-900 mb-2">Operations Supervisor</h3>
+                        <p className="text-gray-500 font-medium leading-relaxed">Oversees task distribution, document validation, and team performance.</p>
+                    </button>
                 </div>
-
-                {/* Staff Type Selection */}
-                <div className="bg-white rounded-xl shadow p-6 mb-6">
-                    <h2 className="text-xl font-bold mb-6">Select Staff Type</h2>
-                    <div className="grid grid-cols-2 gap-4">
-                        <button
-                            onClick={() => {
-                                setStaffType('technician');
-                                setFormData({ ...formData, employeeType: 'technician' });
-                                setStep(2);
-                            }}
-                            className={`p-6 border-2 rounded-xl flex flex-col items-center transition ${staffType === 'technician' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
-                        >
-                            <Wrench className="mb-3 text-blue-600" size={32} />
-                            <div className="font-bold">Technician</div>
-                            <div className="text-sm text-gray-600 mt-1">Field operations & repairs</div>
-                        </button>
-
-                        <button
-                            onClick={() => {
-                                setStaffType('supervisor');
-                                setFormData({ ...formData, employeeType: 'supervisor' });
-                                setStep(2);
-                            }}
-                            className={`p-6 border-2 rounded-xl flex flex-col items-center transition ${staffType === 'supervisor' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
-                        >
-                            <Shield className="mb-3 text-purple-600" size={32} />
-                            <div className="font-bold">Supervisor</div>
-                            <div className="text-sm text-gray-600 mt-1">Team management & oversight</div>
-                        </button>
-                    </div>
-                </div>
-
-                {/* Registration Form */}
-                {step === 2 && (
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold">
-                                Register New {staffType === 'technician' ? 'Technician' : 'Supervisor'}
-                            </h2>
-                            <button onClick={() => setStep(1)} className="text-gray-500">
-                                <X size={20} />
+            ) : (
+                <div className="bg-white rounded-[2.5rem] shadow-xl shadow-gray-200/50 border border-gray-100 overflow-hidden">
+                    <div className="p-8 border-b border-gray-50 bg-gray-50/50 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => setStep(1)} className="p-2 hover:bg-white rounded-xl transition-colors">
+                                <X size={20} className="text-gray-400" />
                             </button>
+                            <h2 className="text-xl font-black text-gray-900">New {staffType.charAt(0).toUpperCase() + staffType.slice(1)} Registration</h2>
+                        </div>
+                        <div className="px-4 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-black uppercase tracking-widest">Step 2 of 2</div>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="p-10 space-y-8">
+                        {error && (
+                            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-sm font-bold">
+                                <AlertCircle size={18} /> {error}
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Full Name</label>
+                                <input
+                                    type="text"
+                                    required
+                                    className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-800"
+                                    value={formData.fullName}
+                                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
+                                <input
+                                    type="email"
+                                    required
+                                    className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-800"
+                                    value={formData.email}
+                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Phone Number</label>
+                                <input
+                                    type="tel"
+                                    required
+                                    className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-800"
+                                    value={formData.phone}
+                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Department</label>
+                                <select
+                                    required
+                                    className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-800 appearance-none"
+                                    value={formData.department}
+                                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                                >
+                                    <option value="">Select Department</option>
+                                    {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                                </select>
+                            </div>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            {/* Personal Information */}
-                            <div>
-                                <h3 className="font-bold mb-4 flex items-center">
-                                    <UserPlus className="mr-2" /> Personal Information
-                                </h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <input
-                                        type="text"
-                                        placeholder="Full Name"
-                                        value={formData.fullName}
-                                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                                        className="col-span-2 p-3 border border-gray-300 rounded-lg"
-                                        required
-                                    />
-                                    <input
-                                        type="email"
-                                        placeholder="Email"
-                                        value={formData.email}
-                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                        className="p-3 border border-gray-300 rounded-lg"
-                                        required
-                                    />
-                                    <input
-                                        type="tel"
-                                        placeholder="Phone"
-                                        value={formData.phone}
-                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                        className="p-3 border border-gray-300 rounded-lg"
-                                        required
-                                    />
-                                </div>
+                        <div className="h-px bg-gray-100"></div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Username</label>
+                                <input
+                                    type="text"
+                                    required
+                                    className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-800"
+                                    value={formData.username}
+                                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                                />
                             </div>
-
-                            {/* Department & Position */}
-                            <div>
-                                <h3 className="font-bold mb-4 flex items-center">
-                                    <Building className="mr-2" /> Employment Details
-                                </h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <select
-                                        value={formData.department}
-                                        onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                                        className="p-3 border border-gray-300 rounded-lg"
-                                        required
-                                    >
-                                        <option value="">Select Department</option>
-                                        {departments.map(dept => (
-                                            <option key={dept} value={dept}>{dept}</option>
-                                        ))}
-                                    </select>
-                                    <input
-                                        type="text"
-                                        placeholder="Position Title"
-                                        value={formData.position}
-                                        onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                                        className="p-3 border border-gray-300 rounded-lg"
-                                        required
-                                    />
-                                </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Temporary Password</label>
+                                <input
+                                    type="password"
+                                    required
+                                    className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-gray-800"
+                                    value={formData.password}
+                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                />
                             </div>
+                        </div>
 
-                            {/* Work Zones */}
-                            <div>
-                                <h3 className="font-bold mb-4 flex items-center">
-                                    <MapPin className="mr-2" /> Work Zones
-                                </h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {workZonesOptions.map(zone => (
-                                        <button
-                                            key={zone}
-                                            type="button"
-                                            onClick={() => toggleZone(zone)}
-                                            className={`px-3 py-2 rounded-lg border ${formData.workZones.includes(zone) ? 'bg-blue-100 border-blue-500 text-blue-700' : 'bg-gray-100 border-gray-300'}`}
-                                        >
-                                            {zone}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Skills (Technician only) */}
-                            {staffType === 'technician' && (
-                                <div>
-                                    <h3 className="font-bold mb-4 flex items-center">
-                                        <Briefcase className="mr-2" /> Skills
-                                    </h3>
-                                    <div className="flex flex-wrap gap-2">
-                                        {skillsOptions.map(skill => (
-                                            <button
-                                                key={skill}
-                                                type="button"
-                                                onClick={() => toggleSkill(skill)}
-                                                className={`px-3 py-2 rounded-lg border ${formData.skills.includes(skill) ? 'bg-green-100 border-green-500 text-green-700' : 'bg-gray-100 border-gray-300'}`}
-                                            >
-                                                {skill}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Work Schedule */}
-                            <div>
-                                <h3 className="font-bold mb-4 flex items-center">
-                                    <Calendar className="mr-2" /> Work Schedule
-                                </h3>
-                                <div className="grid grid-cols-2 gap-4 mb-4">
-                                    <input
-                                        type="time"
-                                        value={formData.schedule.start}
-                                        onChange={(e) => setFormData({
-                                            ...formData,
-                                            schedule: { ...formData.schedule, start: e.target.value }
-                                        })}
-                                        className="p-3 border border-gray-300 rounded-lg"
-                                    />
-                                    <input
-                                        type="time"
-                                        value={formData.schedule.end}
-                                        onChange={(e) => setFormData({
-                                            ...formData,
-                                            schedule: { ...formData.schedule, end: e.target.value }
-                                        })}
-                                        className="p-3 border border-gray-300 rounded-lg"
-                                    />
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {daysOptions.map(day => (
-                                        <button
-                                            key={day}
-                                            type="button"
-                                            onClick={() => toggleDay(day)}
-                                            className={`px-3 py-2 rounded-lg border ${formData.schedule.days.includes(day) ? 'bg-yellow-100 border-yellow-500 text-yellow-700' : 'bg-gray-100 border-gray-300'}`}
-                                        >
-                                            {day}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Document Upload */}
-                            <div>
-                                <h3 className="font-bold mb-4 flex items-center">
-                                    <Upload className="mr-2" /> Required Documents
-                                </h3>
-                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                                    <Upload className="mx-auto text-gray-400 mb-2" />
-                                    <p className="text-gray-600 mb-2">Upload ID, certificates, and other documents</p>
-                                    <input
-                                        type="file"
-                                        multiple
-                                        onChange={handleFileUpload}
-                                        className="block mx-auto"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Submit Button */}
-                            <button
-                                type="submit"
-                                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold text-lg"
-                            >
-                                <UserPlus className="inline mr-2" /> Complete Registration
-                            </button>
-                        </form>
-                    </div>
-                )}
-            </div>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full py-4 bg-blue-600 text-white rounded-[1.5rem] font-black shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                        >
+                            {loading ? <Loader2 className="animate-spin" /> : <><UserPlus size={20} /> Register Staff Member</>}
+                        </button>
+                    </form>
+                </div>
+            )}
         </div>
     );
 };

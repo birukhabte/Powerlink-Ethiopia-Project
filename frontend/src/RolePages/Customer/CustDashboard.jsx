@@ -9,16 +9,23 @@ import {
     CheckCircle,
     XCircle,
     Navigation,
-    Target
+    Target,
+    Zap,
+    ChevronRight,
+    Search,
+    Send
 } from 'lucide-react';
 import GISMap from '../../components/SimpleGISMap';
 import { API_ENDPOINTS } from '../../config/api';
+import axios from 'axios';
 
 const Dashboard = () => {
     const navigate = useNavigate();
     const { showOutageForm, setShowOutageForm, showMap, setShowMap } = useOutletContext();
     const [submitted, setSubmitted] = useState(false);
     const [errors, setErrors] = useState({});
+    const [loading, setLoading] = useState(false);
+    const [gettingLocation, setGettingLocation] = useState(false);
 
     const [outageData, setOutageData] = useState({
         location: '',
@@ -30,439 +37,304 @@ const Dashboard = () => {
         urgency: 'medium'
     });
 
-    // Sample existing outages for the map
-    const existingOutages = [
-        {
-            lat: 9.0320,
-            lng: 38.7469,
-            type: 'Complete Outage',
-            status: 'In Progress',
-            reportedAt: '2 hours ago',
-            description: 'Transformer failure affecting entire block'
-        },
-        {
-            lat: 9.0250,
-            lng: 38.7500,
-            type: 'Partial Outage',
-            status: 'Pending',
-            reportedAt: '30 minutes ago',
-            description: 'Flickering lights reported'
-        },
-        {
-            lat: 9.0400,
-            lng: 38.7400,
-            type: 'Line Damage',
-            status: 'Resolved',
-            reportedAt: '1 day ago',
-            description: 'Tree fell on power lines'
-        }
-    ];
-
     const outageTypes = [
-        'Complete Power Outage',
-        'Partial/Flickering',
-        'Low Voltage',
-        'High Voltage',
-        'Transformer Issue',
-        'Line Damage'
+        { label: 'Complete Power Outage', value: 'complete' },
+        { label: 'Partial/Flickering', value: 'partial' },
+        { label: 'Low Voltage', value: 'low_voltage' },
+        { label: 'Transformer Issue', value: 'transformer' },
+        { label: 'Line Damage', value: 'line_damage' }
     ];
-
-    const handleLocationSelect = (locationData) => {
-        setOutageData({
-            ...outageData,
-            location: locationData.address,
-            coordinates: {
-                lat: locationData.lat,
-                lng: locationData.lng
-            }
-        });
-        // If we're in the outage form, switch back to it
-        if (showOutageForm) {
-            setShowMap(false);
-        }
-    };
 
     const getCurrentLocation = () => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-                    
-                    try {
-                        const response = await fetch(
-                            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
-                        );
-                        const data = await response.json();
-                        const address = data.display_name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-                        
-                        setOutageData({
-                            ...outageData,
-                            location: address,
-                            coordinates: { lat, lng }
-                        });
-                    } catch (error) {
-                        console.error('Error getting address:', error);
-                        setOutageData({
-                            ...outageData,
-                            location: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-                            coordinates: { lat, lng }
-                        });
-                    }
-                },
-                (error) => {
-                    console.error('Error getting location:', error);
-                    alert('Unable to get your current location. Please select manually on the map.');
-                }
-            );
-        } else {
-            alert('Geolocation is not supported by this browser.');
+        console.log('Attempting to get current location...');
+        console.log('Geolocation supported:', !!navigator.geolocation);
+        console.log('Protocol:', window.location.protocol);
+        console.log('Hostname:', window.location.hostname);
+
+        if (!navigator.geolocation) {
+            alert('Geolocation is not supported by your browser. Please update your browser or use a different device.');
+            return;
         }
+
+        // Check if we're in a secure context (HTTPS) - allow localhost for development
+        if (window.location.protocol !== 'https:' &&
+            window.location.hostname !== 'localhost' &&
+            window.location.hostname !== '127.0.0.1') {
+            alert('Location services work best with a secure connection (HTTPS). For development, localhost is allowed. If you\'re having issues, try enabling location permissions in your browser.');
+        }
+
+        console.log('Requesting geolocation...');
+        setGettingLocation(true);
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                console.log('Geolocation success:', position);
+                const { latitude, longitude } = position.coords;
+                setOutageData(prev => ({
+                    ...prev,
+                    coordinates: { lat: latitude, lng: longitude }
+                }));
+
+                try {
+                    // Reverse geocoding for a user-friendly address
+                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+                    const data = await response.json();
+                    setOutageData(prev => ({
+                        ...prev,
+                        location: data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+                    }));
+                } catch (e) {
+                    console.error('Reverse geocoding failed:', e);
+                    setOutageData(prev => ({ ...prev, location: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }));
+                } finally {
+                    setGettingLocation(false);
+                }
+            },
+            (error) => {
+                setGettingLocation(false);
+                console.error('Geolocation error:', error);
+
+                // Provide specific error messages based on error code
+                let errorMessage = 'Failed to get location. ';
+                switch (error.code) {
+                    case error.PERMISSION_DENIED:
+                        errorMessage += 'Location access was denied. Please enable location permissions in your browser settings and try again.';
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        errorMessage += 'Location information is unavailable. Please check that location services are enabled on your device.';
+                        break;
+                    case error.TIMEOUT:
+                        errorMessage += 'Location request timed out. Please try again.';
+                        break;
+                    default:
+                        errorMessage += 'An unknown error occurred. Please try again or enter your location manually.';
+                        break;
+                }
+
+                alert(errorMessage);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 15000, // 15 seconds timeout
+                maximumAge: 60000 // Accept cached position up to 1 minute old
+            }
+        );
     };
 
     const handleSubmitOutage = async (e) => {
         e.preventDefault();
-        const newErrors = {};
+        setErrors({});
 
-        // Validation
-        if (!outageData.location) newErrors.location = 'Location is required';
-        if (!outageData.reason) newErrors.reason = 'Reason is required';
-        if (!outageData.description) newErrors.description = 'Description is required';
+        if (!outageData.location) return setErrors({ location: 'Required' });
+        if (!outageData.description) return setErrors({ description: 'Required' });
 
-        if (Object.keys(newErrors).length > 0) {
-            setErrors(newErrors);
-            return;
-        }
-
+        setLoading(true);
         try {
-            // Prepare outage report data
-            const outageReport = {
-                title: `Power Outage - ${outageData.location}`,
+            const user = JSON.parse(localStorage.getItem('user') || 'null');
+            const token = localStorage.getItem('token');
+
+            const payload = {
+                title: `${outageData.outageType.toUpperCase()} - ${outageData.location.split(',')[0]}`,
                 description: outageData.description,
                 outage_type: outageData.outageType,
                 urgency: outageData.urgency,
-                latitude: outageData.coordinates?.lat || null,
-                longitude: outageData.coordinates?.lng || null,
+                latitude: outageData.coordinates?.lat,
+                longitude: outageData.coordinates?.lng,
                 address: outageData.location,
                 estimated_affected: outageData.estimatedAffected,
                 reason: outageData.reason,
-                reported_by: 1 // Replace with actual user ID from auth
+                reported_by: user?.id
             };
 
-            // Submit to backend
-            const response = await fetch(API_ENDPOINTS.outages.base, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(outageReport)
+            const response = await axios.post(API_ENDPOINTS.outages.base, payload, {
+                headers: { Authorization: `Bearer ${token}` }
             });
 
-            const data = await response.json();
-
-            if (data.success) {
-                // Create local ticket for immediate display
-                const ticketId = `OUT-${new Date().getFullYear()}-${String(data.outage.id).padStart(5, '0')}`;
-                const newTicket = {
-                    id: ticketId,
-                    title: `Power Outage - ${outageData.location}`,
-                    status: 'pending',
-                    created: new Date().toLocaleString(),
-                    location: outageData.location,
-                    description: outageData.description,
-                    technician: 'Not assigned',
-                    priority: outageData.urgency.charAt(0).toUpperCase() + outageData.urgency.slice(1),
-                    coordinates: outageData.coordinates,
-                    updates: [
-                        { time: new Date().toLocaleTimeString(), message: 'Outage reported' }
-                    ]
-                };
-
-                // Save to localStorage
-                const existingTickets = JSON.parse(localStorage.getItem('powerlink_tickets') || '[]');
-                localStorage.setItem('powerlink_tickets', JSON.stringify([newTicket, ...existingTickets]));
-
+            if (response.data.success) {
                 setSubmitted(true);
-                setErrors({});
-
-                // Reset form after 3 seconds
                 setTimeout(() => {
                     setShowOutageForm(false);
                     setSubmitted(false);
-                    setOutageData({
-                        location: '',
-                        coordinates: null,
-                        outageType: 'complete',
-                        reason: '',
-                        description: '',
-                        estimatedAffected: 'household',
-                        urgency: 'medium'
-                    });
+                    navigate('/ticket');
                 }, 3000);
-            } else {
-                alert('Error submitting outage report: ' + data.error);
             }
         } catch (error) {
-            console.error('Error submitting outage:', error);
-            alert('Failed to submit outage report. Please try again.');
+            console.error('Submit error:', error);
+            alert('Failed to report outage');
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
-        <>
+        <div className="max-w-6xl mx-auto">
             {!showOutageForm && !showMap && (
                 <>
-                    {/* Dashboard Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <div className="bg-white p-6 rounded-xl shadow">
-                            <div className="text-2xl font-bold text-green-600">Active</div>
-                            <div className="text-gray-600">Power Status</div>
+                    <header className="mb-10">
+                        <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">CUSTOMER CONSOLE</h1>
+                        <p className="text-slate-500 font-medium">Report issues and manage your electricity services</p>
+                    </header>
+
+                    <div className="grid md:grid-cols-3 gap-6 mb-12">
+                        <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 flex items-center justify-between group">
+                            <div>
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Grid Status</div>
+                                <div className="text-2xl font-black text-emerald-500 flex items-center gap-2">
+                                    <Zap size={20} /> ACTIVE
+                                </div>
+                            </div>
+                            <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
+                                <CheckCircle size={24} />
+                            </div>
                         </div>
-                        <div className="bg-white p-6 rounded-xl shadow">
-                            <div className="text-2xl font-bold">2</div>
-                            <div className="text-gray-600">Open Tickets</div>
+                        <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 cursor-pointer hover:scale-105 transition-transform" onClick={() => navigate('/ticket')}>
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Active Tickets</div>
+                            <div className="text-3xl font-black text-slate-900">02</div>
                         </div>
-                        <div className="bg-white p-6 rounded-xl shadow">
-                            <div className="text-2xl font-bold">5</div>
-                            <div className="text-gray-600">Resolved Issues</div>
+                        <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Safety Alerts</div>
+                            <div className="text-3xl font-black text-slate-900">0</div>
                         </div>
                     </div>
 
-                    {/* Quick Actions */}
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <h2 className="text-xl font-bold mb-4">Quick Actions</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <button
-                                onClick={() => setShowOutageForm(true)}
-                                className="p-4 border-2 border-red-200 bg-red-50 rounded-lg flex items-center hover:bg-red-100 cursor-pointer"
-                            >
-                                <AlertTriangle className="text-red-600 mr-3" />
-                                <div>
-                                    <div className="font-bold">Report Outage</div>
-                                    <div className="text-sm text-gray-600">Report power interruption</div>
-                                </div>
-                            </button>
+                    <div className="grid md:grid-cols-2 gap-8">
+                        <button onClick={() => setShowOutageForm(true)} className="relative overflow-hidden bg-white p-8 rounded-[2rem] border-2 border-red-50 shadow-xl shadow-red-100 text-left group hover:border-red-500 transition-all">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-150 transition-transform">
+                                <AlertTriangle size={120} />
+                            </div>
+                            <div className="bg-red-500 w-14 h-14 rounded-2xl flex items-center justify-center text-white mb-6 shadow-lg shadow-red-200">
+                                <AlertTriangle size={28} />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900 mb-2 italic tracking-tighter">REPORT POWER OUTAGE</h3>
+                            <p className="text-slate-500 font-medium mb-4">Let our field teams know about interruptions in your area.</p>
+                            <div className="flex items-center text-red-600 font-black text-xs">
+                                START REPORT <ChevronRight size={16} />
+                            </div>
+                        </button>
 
-                            <button
-                                onClick={() => setShowMap(true)}
-                                className="p-4 border-2 border-blue-200 bg-blue-50 rounded-lg flex items-center hover:bg-blue-100 cursor-pointer"
-                            >
-                                <Map className="text-blue-600 mr-3" />
-                                <div>
-                                    <div className="font-bold">View Outage Map</div>
-                                    <div className="text-sm text-gray-600">Real-time outage locations</div>
-                                </div>
-                            </button>
-                        </div>
+                        <button onClick={() => setShowMap(true)} className="relative overflow-hidden bg-white p-8 rounded-[2rem] border-2 border-blue-50 shadow-xl shadow-blue-100 text-left group hover:border-blue-500 transition-all">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-150 transition-transform">
+                                <Map size={120} />
+                            </div>
+                            <div className="bg-blue-600 w-14 h-14 rounded-2xl flex items-center justify-center text-white mb-6 shadow-lg shadow-blue-200">
+                                <Map size={28} />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900 mb-2 italic tracking-tighter">VISUALIZE GRID MAP</h3>
+                            <p className="text-slate-500 font-medium mb-4">Real-time view of reported outages and repair progress.</p>
+                            <div className="flex items-center text-blue-600 font-black text-xs">
+                                OPEN GIS MAP <ChevronRight size={16} />
+                            </div>
+                        </button>
                     </div>
                 </>
             )}
 
-            {/* Outage Reporting Form */}
             {showOutageForm && (
-                <div className="bg-white rounded-xl shadow p-6 max-w-2xl mx-auto">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold flex items-center">
-                            <AlertTriangle className="text-red-600 mr-3" />
-                            Report Power Outage
+                <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 max-w-2xl mx-auto border border-slate-100 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-500 via-amber-500 to-red-500"></div>
+                    <div className="flex justify-between items-center mb-10">
+                        <h2 className="text-3xl font-black text-slate-900 italic tracking-tighter flex items-center gap-3">
+                            <AlertTriangle className="text-red-600" size={32} /> EMERGENCY REPORT
                         </h2>
-                        <button onClick={() => setShowOutageForm(false)} className="cursor-pointer">
-                            <XCircle className="text-gray-400" />
+                        <button onClick={() => setShowOutageForm(false)} className="bg-slate-50 p-2 rounded-full hover:bg-slate-100 transition-colors">
+                            <XCircle className="text-slate-400" />
                         </button>
                     </div>
 
                     {submitted ? (
-                        <div className="text-center py-12">
-                            <CheckCircle className="text-green-500 mx-auto mb-4" size={64} />
-                            <h3 className="text-2xl font-bold mb-2">Outage Reported Successfully!</h3>
-                            <p className="text-gray-600 mb-4">Ticket #OUT-2024-00123 has been created.</p>
-                            <p className="text-sm text-gray-500">GIS map updated. Our team will respond shortly.</p>
+                        <div className="text-center py-16">
+                            <div className="bg-emerald-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-8 animate-bounce">
+                                <CheckCircle className="text-emerald-500" size={48} />
+                            </div>
+                            <h3 className="text-3xl font-black text-slate-900 mb-2">REPORT LOGGED</h3>
+                            <p className="text-slate-500 font-bold mb-4 uppercase tracking-widest text-xs">Dispatching field team soon</p>
+                            <p className="text-slate-400 text-sm">Redirecting to tracking console...</p>
                         </div>
                     ) : (
-                        <form onSubmit={handleSubmitOutage} className="space-y-6">
-                            {/* Location */}
-                            <div>
-                                <label className="block mb-2 font-medium">
-                                    <MapPin className="inline mr-2" size={18} />
-                                    Location *
-                                </label>
-                                <div className="space-y-2">
-                                    <input
-                                        type="text"
-                                        value={outageData.location}
-                                        onChange={(e) => setOutageData({ ...outageData, location: e.target.value })}
-                                        placeholder="Enter your address or select from map"
-                                        className="w-full p-3 border border-gray-300 rounded-lg"
-                                    />
-                                    <div className="flex gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowMap(true)}
-                                            className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-                                        >
-                                            <Map className="mr-1" size={16} />
-                                            Select from Map
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={getCurrentLocation}
-                                            className="flex items-center px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
-                                        >
-                                            <Navigation className="mr-1" size={16} />
-                                            Use Current Location
-                                        </button>
+                        <form onSubmit={handleSubmitOutage} className="space-y-8">
+                            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                                    <h4 className="font-black text-slate-900 text-sm tracking-widest uppercase">Location Intelligence</h4>
+                                    <button type="button" onClick={getCurrentLocation} disabled={gettingLocation} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${gettingLocation ? 'bg-slate-200 text-slate-400' : 'bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-100'}`}>
+                                        {gettingLocation ? 'FETCHING GPS...' : <><Navigation size={14} /> USE PRECISE LOCATION</>}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const lat = prompt('Enter latitude (e.g., 9.1450):');
+                                            const lng = prompt('Enter longitude (e.g., 38.7521):');
+                                            if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                                                setOutageData(prev => ({
+                                                    ...prev,
+                                                    coordinates: { lat: parseFloat(lat), lng: parseFloat(lng) },
+                                                    location: `${parseFloat(lat).toFixed(6)}, ${parseFloat(lng).toFixed(6)}`
+                                                }));
+                                            }
+                                        }}
+                                        className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                                    >
+                                        <MapPin size={14} /> ENTER COORDINATES
+                                    </button>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="relative">
+                                        <input type="text" value={outageData.location} onChange={(e) => setOutageData({ ...outageData, location: e.target.value })} placeholder="Enter your address..." className="w-full p-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-red-50 pl-12 text-sm font-medium" />
+                                        <MapPin className="absolute left-4 top-4 text-red-500" size={20} />
                                     </div>
                                     {outageData.coordinates && (
-                                        <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
-                                            <Target className="inline mr-1" size={14} />
-                                            Coordinates: {outageData.coordinates.lat.toFixed(6)}, {outageData.coordinates.lng.toFixed(6)}
+                                        <div className="bg-emerald-50 text-emerald-700 p-3 rounded-xl border border-emerald-100 text-[10px] font-black uppercase flex items-center gap-2">
+                                            <Target size={14} /> GPS SYNCED: {outageData.coordinates.lat.toFixed(6)}, {outageData.coordinates.lng.toFixed(6)}
                                         </div>
                                     )}
                                 </div>
-                                {errors.location && (
-                                    <p className="text-red-500 text-sm mt-1">{errors.location}</p>
-                                )}
                             </div>
 
-                            {/* Outage Type & Urgency */}
                             <div className="grid md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block mb-2 font-medium">Outage Type *</label>
-                                    <select
-                                        value={outageData.outageType}
-                                        onChange={(e) => setOutageData({ ...outageData, outageType: e.target.value })}
-                                        className="w-full p-3 border border-gray-300 rounded-lg"
-                                    >
-                                        {outageTypes.map((type, idx) => (
-                                            <option key={idx} value={type.toLowerCase()}>{type}</option>
-                                        ))}
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Incident Category</label>
+                                    <select value={outageData.outageType} onChange={(e) => setOutageData({ ...outageData, outageType: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-red-50 text-sm font-bold">
+                                        {outageTypes.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                     </select>
                                 </div>
-
                                 <div>
-                                    <label className="block mb-2 font-medium">
-                                        <AlertTriangle className="inline mr-2" size={18} />
-                                        Urgency Level
-                                    </label>
-                                    <select
-                                        value={outageData.urgency}
-                                        onChange={(e) => setOutageData({ ...outageData, urgency: e.target.value })}
-                                        className="w-full p-3 border border-gray-300 rounded-lg"
-                                    >
-                                        <option value="low">Low (Not urgent)</option>
-                                        <option value="medium">Medium (Standard)</option>
-                                        <option value="high">High (Critical)</option>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Urgency Level</label>
+                                    <select value={outageData.urgency} onChange={(e) => setOutageData({ ...outageData, urgency: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-red-50 text-sm font-bold">
+                                        <option value="low">Standard Priority</option>
+                                        <option value="medium">Intermediate</option>
+                                        <option value="high">Critical / Dangerous</option>
                                     </select>
                                 </div>
                             </div>
 
-                            {/* Reason */}
                             <div>
-                                <label className="block mb-2 font-medium">Reason (if known)</label>
-                                <input
-                                    type="text"
-                                    value={outageData.reason}
-                                    onChange={(e) => setOutageData({ ...outageData, reason: e.target.value })}
-                                    placeholder="e.g., Storm, accident, equipment failure"
-                                    className="w-full p-3 border border-gray-300 rounded-lg"
-                                />
-                                {errors.reason && (
-                                    <p className="text-red-500 text-sm mt-1">{errors.reason}</p>
-                                )}
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Context & Description</label>
+                                <textarea rows="4" value={outageData.description} onChange={(e) => setOutageData({ ...outageData, description: e.target.value })} placeholder="E.g. Sparking on line, pole leaning, entire neighborhood dark..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-red-50 text-sm" />
                             </div>
 
-                            {/* Description */}
-                            <div>
-                                <label className="block mb-2 font-medium">Description *</label>
-                                <textarea
-                                    rows="4"
-                                    value={outageData.description}
-                                    onChange={(e) => setOutageData({ ...outageData, description: e.target.value })}
-                                    placeholder="Describe the issue in detail..."
-                                    className="w-full p-3 border border-gray-300 rounded-lg"
-                                />
-                                {errors.description && (
-                                    <p className="text-red-500 text-sm mt-1">{errors.description}</p>
-                                )}
-                            </div>
-
-                            {/* Affected Area */}
-                            <div>
-                                <label className="block mb-2 font-medium">
-                                    <Users className="inline mr-2" size={18} />
-                                    Estimated Affected Area
-                                </label>
-                                <select
-                                    value={outageData.estimatedAffected}
-                                    onChange={(e) => setOutageData({ ...outageData, estimatedAffected: e.target.value })}
-                                    className="w-full p-3 border border-gray-300 rounded-lg"
-                                >
-                                    <option value="household">Just my household</option>
-                                    <option value="street">My street/neighborhood</option>
-                                    <option value="multiple">Multiple streets</option>
-                                    <option value="area">Entire area/sector</option>
-                                </select>
-                            </div>
-
-                            {/* Submit Button */}
-                            <button
-                                type="submit"
-                                className="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold text-lg cursor-pointer"
-                            >
-                                Submit Outage Report
+                            <button type="submit" disabled={loading} className={`w-full py-5 rounded-2xl font-black text-lg uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-3 ${loading ? 'bg-slate-100 text-slate-400' : 'bg-red-600 text-white hover:bg-red-700 shadow-red-100 active:scale-95'}`}>
+                                {loading ? 'TRANSMITTING...' : <><Send size={24} /> BROADCAST OUTAGE</>}
                             </button>
                         </form>
                     )}
                 </div>
             )}
 
-            {/* GIS Map View */}
             {showMap && (
-                <div className="bg-white rounded-xl shadow p-6">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold flex items-center">
-                            <Map className="text-blue-600 mr-3" />
-                            Interactive Outage Map
+                <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-100">
+                    <div className="flex justify-between items-center mb-8">
+                        <h2 className="text-3xl font-black text-slate-900 italic tracking-tighter flex items-center gap-3">
+                            <Map className="text-blue-600" size={32} /> LIVE GRID INTELLIGENCE
                         </h2>
-                        <button onClick={() => setShowMap(false)} className="cursor-pointer">
-                            <XCircle className="text-gray-400" />
+                        <button onClick={() => setShowMap(false)} className="bg-slate-50 p-2 rounded-full hover:bg-slate-100">
+                            <XCircle className="text-slate-400" />
                         </button>
                     </div>
 
-                    <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-                        <h3 className="font-semibold text-blue-800 mb-2">How to use the map:</h3>
-                        <ul className="text-sm text-blue-700 space-y-1">
-                            <li>• <strong>Red markers:</strong> Existing power outages</li>
-                            <li>• <strong>Blue marker:</strong> Your current location (if available)</li>
-                            <li>• <strong>Green marker:</strong> Selected location for your report</li>
-                            <li>• <strong>Click anywhere</strong> on the map to select that location</li>
-                        </ul>
+                    <div className="rounded-[2rem] overflow-hidden border-4 border-slate-50 shadow-inner">
+                        <GISMap height="500px" />
                     </div>
-
-                    <GISMap
-                        onLocationSelect={handleLocationSelect}
-                        selectedLocation={outageData.coordinates ? [outageData.coordinates.lat, outageData.coordinates.lng] : null}
-                        existingOutages={existingOutages}
-                        height="500px"
-                    />
-
-                    {outageData.location && (
-                        <div className="mt-4 p-4 bg-green-50 rounded-lg">
-                            <h4 className="font-semibold text-green-800">Selected Location:</h4>
-                            <p className="text-green-700">{outageData.location}</p>
-                            {showOutageForm && (
-                                <button
-                                    onClick={() => setShowMap(false)}
-                                    className="mt-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                                >
-                                    Use This Location for Report
-                                </button>
-                            )}
-                        </div>
-                    )}
                 </div>
             )}
-        </>
+        </div>
     );
 };
 

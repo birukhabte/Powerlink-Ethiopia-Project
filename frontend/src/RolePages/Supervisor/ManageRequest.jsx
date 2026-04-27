@@ -14,44 +14,53 @@ import {
     FileText,
     Phone,
     User,
-    Info
+    Info,
+    Check
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_ENDPOINTS } from '../../config/api';
+import axios from 'axios';
 
 const ManageRequest = () => {
     const navigate = useNavigate();
     const [selectedRequest, setSelectedRequest] = useState(null);
-    const [assignedTech, setAssignedTech] = useState({});
+    const [assignedTechId, setAssignedTechId] = useState('');
+    const [scheduledTime, setScheduledTime] = useState('');
     const [requests, setRequests] = useState([]);
+    const [technicians, setTechnicians] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [techLoading, setTechLoading] = useState(false);
     const [filterServiceType, setFilterServiceType] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
+    const [actionLoading, setActionLoading] = useState(false);
 
-    // Fetch service requests from backend
+    // Fetch service requests and technicians from backend
     useEffect(() => {
         fetchRequests();
-        // Refresh every 30 seconds
-        const interval = setInterval(fetchRequests, 30000);
+        fetchTechnicians();
+        // Refresh every 60 seconds
+        const interval = setInterval(fetchRequests, 60000);
         return () => clearInterval(interval);
     }, []);
 
     const fetchRequests = async () => {
         try {
             setLoading(true);
-            const response = await fetch(API_ENDPOINTS.serviceRequests.base);
-            const data = await response.json();
+            const token = localStorage.getItem('token');
+            const response = await axios.get(API_ENDPOINTS.serviceRequests.base, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-            if (data.success) {
+            if (response.data.success) {
                 // Format requests for display
-                const formattedRequests = data.requests.map(request => ({
+                const formattedRequests = response.data.requests.map(request => ({
                     id: request.ticket_id,
                     dbId: request.id,
                     type: formatServiceType(request.service_type),
                     location: request.full_address,
                     customer: request.full_name,
                     phone: request.phone,
-                    priority: capitalizeFirst(request.priority),
+                    priority: capitalizeFirst(request.priority || 'medium'),
                     status: request.status,
                     submitted: calculateTimeAgo(request.created_at),
                     details: `${formatServiceType(request.service_type)} request from ${request.full_name}`,
@@ -61,7 +70,8 @@ const ManageRequest = () => {
                     kebele: request.kebele,
                     documents: request.documents,
                     supervisorNotes: request.supervisor_notes,
-                    assignedTo: request.assigned_to_username || 'Not assigned',
+                    assignedTo: request.assigned_to_name || 'Not assigned',
+                    assignedToId: request.assigned_to,
                     createdAt: request.created_at
                 }));
                 setRequests(formattedRequests);
@@ -70,6 +80,23 @@ const ManageRequest = () => {
             console.error('Error fetching requests:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchTechnicians = async () => {
+        try {
+            setTechLoading(true);
+            const token = localStorage.getItem('token');
+            const response = await axios.get(API_ENDPOINTS.admin.technicians, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (response.data.success) {
+                setTechnicians(response.data.technicians);
+            }
+        } catch (error) {
+            console.error('Error fetching technicians:', error);
+        } finally {
+            setTechLoading(false);
         }
     };
 
@@ -85,6 +112,7 @@ const ManageRequest = () => {
     };
 
     const capitalizeFirst = (str) => {
+        if (!str) return '';
         return str.charAt(0).toUpperCase() + str.slice(1);
     };
 
@@ -116,29 +144,37 @@ const ManageRequest = () => {
         return matchesSearch && matchesType;
     });
 
-    // Available technicians
-    const technicians = [
-        { id: 'T-023', name: 'Michael T.', skills: ['Outage Repair', 'Line Work'], status: 'available', zone: 'Bole' },
-        { id: 'T-045', name: 'Samuel K.', skills: ['Meter Installation'], status: 'available', zone: 'Megenagna' },
-        { id: 'T-067', name: 'David M.', skills: ['Transformer Repair'], status: 'busy', zone: 'Kirkos' },
-        { id: 'T-089', name: 'John A.', skills: ['Emergency Response'], status: 'available', zone: 'Addis Central' },
-    ];
+    const handleAssign = async (request) => {
+        if (!assignedTechId || !scheduledTime) {
+            alert('Please select both a technician and a scheduled time');
+            return;
+        }
 
-    const timeSlots = [
-        '08:00 - 10:00', '10:00 - 12:00', '12:00 - 14:00',
-        '14:00 - 16:00', '16:00 - 18:00', 'Tomorrow Morning'
-    ];
+        try {
+            setActionLoading(true);
+            const token = localStorage.getItem('token');
+            
+            // Call the approval/assignment endpoint
+            const response = await axios.post(API_ENDPOINTS.serviceRequests.approve(request.dbId), {
+                assigned_to: parseInt(assignedTechId),
+                supervisor_notes: `Scheduled for ${scheduledTime}`,
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-    const handleAssign = (requestId, techId, timeSlot) => {
-        setAssignedTech({ ...assignedTech, [requestId]: { techId, timeSlot } });
-
-        // Update request status
-        setRequests(requests.map(req =>
-            req.id === requestId ? { ...req, status: 'assigned' } : req
-        ));
-
-        // Update technician status
-        console.log(`Assigned ${techId} to ${requestId} at ${timeSlot}`);
+            if (response.data.success) {
+                alert(`Task ${request.id} successfully assigned!`);
+                fetchRequests(); // Refresh list
+                setSelectedRequest(null);
+                setAssignedTechId('');
+                setScheduledTime('');
+            }
+        } catch (error) {
+            console.error('Error assigning task:', error);
+            alert('Failed to assign task. ' + (error.response?.data?.error || ''));
+        } finally {
+            setActionLoading(false);
+        }
     };
 
     const getPriorityColor = (priority) => {
@@ -151,7 +187,13 @@ const ManageRequest = () => {
     };
 
     const getStatusColor = (status) => {
-        return status === 'assigned' ? 'text-green-600' : 'text-yellow-600';
+        switch (status) {
+            case 'assigned':
+            case 'in_progress': return 'text-green-600 font-semibold';
+            case 'completed': return 'text-blue-600 font-bold';
+            case 'rejected': return 'text-red-600';
+            default: return 'text-yellow-600';
+        }
     };
 
     return (
@@ -169,19 +211,19 @@ const ManageRequest = () => {
                     {/* Left: Requests List */}
                     <div className="lg:col-span-2">
                         <div className="bg-white rounded-xl shadow p-4 mb-6">
-                            <div className="flex justify-between items-center mb-4">
-                                <div className="relative flex-1 max-w-md">
+                            <div className="flex justify-between items-center mb-4 gap-4">
+                                <div className="relative flex-1">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                                     <input
                                         type="text"
-                                        placeholder="Search requests..."
-                                        className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                                        placeholder="Search by ID or Customer..."
+                                        className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                     />
                                 </div>
                                 <select
-                                    className="border rounded-lg px-3 py-2"
+                                    className="border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
                                     value={filterServiceType}
                                     onChange={(e) => setFilterServiceType(e.target.value)}
                                 >
@@ -191,44 +233,55 @@ const ManageRequest = () => {
                                     <option value="name-change">Name Change</option>
                                     <option value="tariff-change">Tariff Change</option>
                                     <option value="meter-separation">Meter Separation</option>
-                                    <option value="outage">Reported Outage</option>
                                 </select>
                             </div>
 
                             {loading ? (
-                                <div className="text-center py-8 text-gray-500">Loading requests...</div>
+                                <div className="flex flex-col items-center py-12">
+                                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
+                                    <p className="text-gray-500">Loading requests...</p>
+                                </div>
                             ) : filteredRequests.length === 0 ? (
-                                <div className="text-center py-8 text-gray-500">No requests found</div>
+                                <div className="text-center py-12">
+                                    <FileText className="mx-auto text-gray-300 mb-4" size={48} />
+                                    <p className="text-gray-500">No requests match your criteria</p>
+                                </div>
                             ) : (
                                 <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                                     {filteredRequests.map(request => (
-                                        <div key={request.id}
-                                            className={`p-4 border rounded-lg cursor-pointer hover:bg-gray-50 ${selectedRequest?.id === request.id ? 'border-blue-500 bg-blue-50' : ''}`}
-                                            onClick={() => setSelectedRequest(request)}
+                                        <div key={request.dbId}
+                                            className={`p-4 border rounded-lg cursor-pointer transition-all hover:shadow-md ${selectedRequest?.dbId === request.dbId ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-gray-200'}`}
+                                            onClick={() => {
+                                                setSelectedRequest(request);
+                                                setAssignedTechId(request.assignedToId || '');
+                                            }}
                                         >
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
-                                                    <div className="font-bold text-gray-800">{request.id}</div>
-                                                    <h3 className="font-semibold">{request.type}</h3>
+                                                    <div className="font-bold text-gray-800 text-sm">{request.id}</div>
+                                                    <h3 className="font-bold text-gray-900">{request.type}</h3>
                                                 </div>
                                                 <div className="flex items-center space-x-2">
-                                                    <span className={`px-2 py-1 rounded-full text-xs ${getPriorityColor(request.priority)}`}>
+                                                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${getPriorityColor(request.priority)}`}>
                                                         {request.priority}
                                                     </span>
-                                                    <span className={`text-sm ${getStatusColor(request.status)}`}>
-                                                        {request.status === 'assigned' ? <CheckCircle size={16} className="inline" /> : <Clock size={16} className="inline" />}
-                                                        {request.status}
+                                                    <span className={`text-xs flex items-center gap-1 ${getStatusColor(request.status)}`}>
+                                                        {request.status === 'assigned' ? <CheckCircle size={14} /> : <Clock size={14} />}
+                                                        {request.status.toUpperCase()}
                                                     </span>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center text-sm text-gray-600 mb-2">
-                                                <MapPin size={14} className="mr-1" /> {request.location}
+                                            <div className="grid grid-cols-2 gap-2 text-sm text-gray-600 mt-3">
+                                                <div className="flex items-center"><MapPin size={14} className="mr-1 text-blue-500" /> {request.location.substring(0, 30)}...</div>
+                                                <div className="flex items-center"><User size={14} className="mr-1 text-blue-500" /> {request.customer}</div>
                                             </div>
-                                            <div className="text-sm text-gray-600 mb-2">{request.customer}</div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-500">{request.submitted}</span>
-                                                <ChevronRight size={16} className="text-blue-500" />
+                                            
+                                            <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-100">
+                                                <span className="text-[10px] text-gray-400 font-medium uppercase tracking-tighter">Submitted {request.submitted}</span>
+                                                <div className="flex items-center text-blue-600 text-xs font-bold">
+                                                    MANAGE <ChevronRight size={14} />
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -236,160 +289,129 @@ const ManageRequest = () => {
                             )}
                         </div>
 
-                        {/* Statistics */}
+                        {/* Quick Stats Summary */}
                         <div className="grid grid-cols-3 gap-4">
-                            <div className="bg-white p-4 rounded-xl shadow text-center">
-                                <div className="text-2xl font-bold text-blue-600">{requests.length}</div>
-                                <div className="text-gray-600">Total Requests</div>
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                                <div className="text-3xl font-extrabold text-blue-600">{requests.length}</div>
+                                <div className="text-sm font-semibold text-gray-500 uppercase">Total Volume</div>
                             </div>
-                            <div className="bg-white p-4 rounded-xl shadow text-center">
-                                <div className="text-2xl font-bold text-yellow-600">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                                <div className="text-3xl font-extrabold text-amber-500">
                                     {requests.filter(r => r.status === 'pending' || r.status === 'under_review').length}
                                 </div>
-                                <div className="text-gray-600">Pending</div>
+                                <div className="text-sm font-semibold text-gray-500 uppercase">Pending Review</div>
                             </div>
-                            <div className="bg-white p-4 rounded-xl shadow text-center">
-                                <div className="text-2xl font-bold text-green-600">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                                <div className="text-3xl font-extrabold text-emerald-500">
                                     {requests.filter(r => r.status === 'assigned' || r.status === 'in_progress').length}
                                 </div>
-                                <div className="text-gray-600">Assigned</div>
+                                <div className="text-sm font-semibold text-gray-500 uppercase">Field Operations</div>
                             </div>
                         </div>
                     </div>
 
                     {/* Right: Assignment Panel */}
                     <div className="lg:col-span-1">
-                        <div className="bg-white rounded-xl shadow p-6 sticky top-6">
+                        <div className="bg-white rounded-xl shadow-lg p-6 sticky top-6 border border-gray-100 overflow-hidden">
                             {selectedRequest ? (
                                 <>
-                                    <h2 className="text-xl font-bold mb-4">Assign Technician</h2>
-                                    <div className="bg-blue-50 p-4 rounded-lg mb-6 border border-blue-100">
-                                        <h3 className="font-bold text-blue-800 mb-3 flex items-center">
-                                            <Info size={18} className="mr-2" /> Customer Details
+                                    <div className="flex items-center justify-between mb-6">
+                                        <h2 className="text-xl font-bold text-gray-900">Task Assignment</h2>
+                                        <div className={`px-2 py-1 rounded text-[10px] font-bold ${getPriorityColor(selectedRequest.priority)}`}>
+                                            {selectedRequest.priority}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-50 p-4 rounded-xl mb-6 border border-slate-200">
+                                        <h3 className="font-bold text-slate-800 mb-3 flex items-center text-sm">
+                                            <Info size={16} className="mr-2 text-blue-600" /> CUSTOMER INFO
                                         </h3>
-                                        <div className="space-y-2 text-sm">
-                                            <div className="flex items-start">
-                                                <User size={16} className="mr-2 text-blue-600 mt-0.5" />
-                                                <div>
-                                                    <span className="text-gray-500 block">Full Name</span>
-                                                    <span className="font-medium text-gray-800">{selectedRequest.customer}</span>
-                                                </div>
+                                        <div className="space-y-3 text-sm">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-slate-500">Full Name</span>
+                                                <span className="font-bold text-slate-900">{selectedRequest.customer}</span>
                                             </div>
-                                            <div className="flex items-start">
-                                                <Phone size={16} className="mr-2 text-blue-600 mt-0.5" />
-                                                <div>
-                                                    <span className="text-gray-500 block">Phone Number</span>
-                                                    <span className="font-medium text-gray-800">{selectedRequest.phone}</span>
-                                                </div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-slate-500">Phone</span>
+                                                <span className="font-bold text-slate-900">{selectedRequest.phone}</span>
                                             </div>
-                                            <div className="flex items-start">
-                                                <MapPin size={16} className="mr-2 text-blue-600 mt-0.5" />
-                                                <div>
-                                                    <span className="text-gray-500 block">Address Info</span>
-                                                    <span className="font-medium text-gray-800">
-                                                        {selectedRequest.city}, {selectedRequest.woreda}, {selectedRequest.kebele}
-                                                    </span>
-                                                    <span className="text-gray-600 block text-xs mt-1">
-                                                        {selectedRequest.location}
-                                                    </span>
-                                                </div>
+                                            <div className="pt-2">
+                                                <span className="text-slate-500 block text-[10px] uppercase font-bold mb-1">Service Address</span>
+                                                <p className="text-slate-700 text-xs leading-relaxed bg-white p-2 rounded border border-slate-100">
+                                                    {selectedRequest.city}, {selectedRequest.woreda}, {selectedRequest.kebele}<br/>
+                                                    <span className="text-[10px]">{selectedRequest.location}</span>
+                                                </p>
                                             </div>
                                         </div>
 
                                         <button
                                             onClick={() => navigate('/supervisor/validate', { state: { requestId: selectedRequest.dbId } })}
-                                            className="w-full mt-4 py-2 bg-white border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors font-semibold flex items-center justify-center text-sm shadow-sm"
+                                            className="w-full mt-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-bold flex items-center justify-center text-sm shadow-md shadow-blue-100"
                                         >
-                                            <FileText size={16} className="mr-2" /> Check Document
+                                            <FileText size={16} className="mr-2" /> VALIDATE DOCUMENTS
                                         </button>
                                     </div>
 
                                     {/* Technician Selection */}
                                     <div className="mb-6">
-                                        <label className="block mb-2 font-medium">Select Technician</label>
-                                        <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                                            {technicians.filter(t => t.status === 'available').map(tech => (
-                                                <button
-                                                    key={tech.id}
-                                                    onClick={() => setAssignedTech({
-                                                        ...assignedTech, [selectedRequest.id]: {
-                                                            ...assignedTech[selectedRequest.id],
-                                                            techId: tech.id
-                                                        }
-                                                    })}
-                                                    className={`w-full text-left p-3 border rounded-lg ${assignedTech[selectedRequest.id]?.techId === tech.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}
-                                                >
-                                                    <div className="font-medium">{tech.name} ({tech.id})</div>
-                                                    <div className="text-sm text-gray-600">Skills: {tech.skills.join(', ')}</div>
-                                                    <div className="text-sm text-gray-500">{tech.zone}</div>
-                                                </button>
-                                            ))}
+                                        <label className="block mb-2 font-bold text-gray-700 text-sm uppercase tracking-wider">Select Field Technician</label>
+                                        <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                            {techLoading ? (
+                                                <div className="text-center py-4 text-xs text-gray-400">Loading staff list...</div>
+                                            ) : technicians.length === 0 ? (
+                                                <div className="text-center py-4 text-xs text-red-400">No active technicians found</div>
+                                            ) : (
+                                                technicians.map(tech => (
+                                                    <button
+                                                        key={tech.id}
+                                                        onClick={() => setAssignedTechId(tech.id)}
+                                                        className={`w-full text-left p-3 border rounded-xl transition-all flex items-center justify-between ${assignedTechId === tech.id ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100' : 'border-gray-200 hover:border-blue-200'}`}
+                                                    >
+                                                        <div>
+                                                            <div className="font-bold text-gray-900 text-sm">{tech.first_name} {tech.last_name}</div>
+                                                            <div className="text-[10px] text-gray-500 font-medium uppercase">{tech.phone || 'No phone'}</div>
+                                                        </div>
+                                                        {assignedTechId === tech.id && <Check size={16} className="text-blue-600" />}
+                                                    </button>
+                                                ))
+                                            )}
                                         </div>
                                     </div>
 
-                                    {/* Time Slot Selection */}
+                                    {/* Scheduled Time */}
                                     <div className="mb-6">
-                                        <label className="block mb-2 font-medium">Select Time Slot</label>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {timeSlots.map(slot => (
-                                                <button
-                                                    key={slot}
-                                                    onClick={() => setAssignedTech({
-                                                        ...assignedTech, [selectedRequest.id]: {
-                                                            ...assignedTech[selectedRequest.id],
-                                                            timeSlot: slot
-                                                        }
-                                                    })}
-                                                    className={`p-2 border rounded text-sm ${assignedTech[selectedRequest.id]?.timeSlot === slot ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}
-                                                >
-                                                    {slot}
-                                                </button>
-                                            ))}
-                                        </div>
+                                        <label className="block mb-2 font-bold text-gray-700 text-sm uppercase tracking-wider">Scheduled Window</label>
+                                        <select 
+                                            className="w-full p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium text-sm"
+                                            value={scheduledTime}
+                                            onChange={(e) => setScheduledTime(e.target.value)}
+                                        >
+                                            <option value="">Select Time Slot</option>
+                                            <option value="Morning (08:00 - 12:00)">Morning (08:00 - 12:00)</option>
+                                            <option value="Afternoon (13:00 - 17:00)">Afternoon (13:00 - 17:00)</option>
+                                            <option value="Emergency Response (ASAP)">Emergency Response (ASAP)</option>
+                                            <option value="Tomorrow Morning">Tomorrow Morning</option>
+                                        </select>
                                     </div>
 
                                     {/* Assign Button */}
                                     <button
-                                        onClick={() => {
-                                            if (assignedTech[selectedRequest.id]?.techId && assignedTech[selectedRequest.id]?.timeSlot) {
-                                                handleAssign(selectedRequest.id, assignedTech[selectedRequest.id].techId, assignedTech[selectedRequest.id].timeSlot);
-                                                alert(`Assigned ${assignedTech[selectedRequest.id].techId} to ${selectedRequest.id}`);
-                                            } else {
-                                                alert('Please select both technician and time slot');
-                                            }
-                                        }}
-                                        className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center justify-center"
+                                        onClick={() => handleAssign(selectedRequest)}
+                                        disabled={actionLoading || !assignedTechId || !scheduledTime}
+                                        className={`w-full py-4 rounded-xl font-black text-white uppercase tracking-widest flex items-center justify-center transition-all ${actionLoading || !assignedTechId || !scheduledTime ? 'bg-gray-300 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg active:scale-95'}`}
                                     >
-                                        <UserCheck className="mr-2" /> Assign Request
+                                        {actionLoading ? 'ASSIGNING...' : <><UserCheck className="mr-2" /> DISPATCH TECHNICIAN</>}
                                     </button>
                                 </>
                             ) : (
-                                <div className="text-center py-8">
-                                    <Eye className="mx-auto text-gray-300 mb-4" size={48} />
-                                    <h3 className="text-xl font-bold text-gray-600 mb-2">Select a Request</h3>
-                                    <p className="text-gray-500">Choose a request from the list to assign a technician</p>
+                                <div className="text-center py-16">
+                                    <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                                        <Eye className="text-slate-300" size={40} />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-gray-800 mb-2">Queue Management</h3>
+                                    <p className="text-gray-500 text-sm px-4">Select a request from the active queue to start the validation and dispatching workflow.</p>
                                 </div>
                             )}
-                        </div>
-
-                        {/* Available Technicians */}
-                        <div className="bg-white rounded-xl shadow p-6 mt-6">
-                            <h3 className="font-bold mb-4 flex items-center">
-                                <Wrench className="mr-2" /> Available Technicians
-                            </h3>
-                            <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                                {technicians.map(tech => (
-                                    <div key={tech.id} className="flex justify-between items-center p-2">
-                                        <div>
-                                            <div className="font-medium">{tech.name}</div>
-                                            <div className="text-sm text-gray-600">{tech.id}</div>
-                                        </div>
-                                        <span className={`px-2 py-1 text-xs rounded ${tech.status === 'available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                            {tech.status}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
                         </div>
                     </div>
                 </div>

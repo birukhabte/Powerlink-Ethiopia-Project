@@ -1,162 +1,244 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import {
-    Users, BarChart, Bell, UserPlus, MessageSquare,
-    Settings, Home, AlertTriangle, Wrench, FileText,
-    ChevronRight, TrendingUp, TrendingDown, Eye, Edit, Trash2
+    Users,
+    ClipboardList,
+    AlertTriangle,
+    CheckCircle,
+    TrendingUp,
+    Clock,
+    Activity,
+    ShieldCheck,
+    Loader2
 } from 'lucide-react';
+import axios from 'axios';
+import { API_ENDPOINTS } from '../../config/api';
 import {
-    BarChart as RechartsBarChart,
-    Bar,
+    LineChart,
+    Line,
     XAxis,
     YAxis,
     CartesianGrid,
     Tooltip,
-    Legend,
-    ResponsiveContainer
+    ResponsiveContainer,
+    AreaChart,
+    Area,
+    PieChart,
+    Pie,
+    Cell
 } from 'recharts';
 
 const AdminDashboard = () => {
-    const [activeTab, setActiveTab] = useState('overview');
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-    // Admin statistics
-    const stats = [
-        { icon: <Users />, label: 'Total Users', value: '1,245', change: '+12%', trend: 'up' },
-        { icon: <AlertTriangle />, label: 'Active Outages', value: '23', change: '-5%', trend: 'down' },
-        { icon: <Wrench />, label: 'Active Technicians', value: '45/50', change: '90%', trend: 'up' },
-        { icon: <FileText />, label: 'Pending Requests', value: '156', change: '+8%', trend: 'up' },
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await axios.get(API_ENDPOINTS.admin.stats, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (response.data.success) {
+                    setStats(response.data.data);
+                }
+            } catch (err) {
+                console.error('Error fetching admin stats:', err);
+                setError('Failed to load dashboard data. Please check your connection.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchStats();
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="h-full flex flex-col items-center justify-center p-10 bg-gray-50/50 rounded-3xl border border-dashed border-gray-200">
+                <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
+                <p className="text-gray-500 font-medium animate-pulse">Analyzing system data...</p>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="p-10 text-center">
+                <div className="bg-red-50 text-red-600 p-6 rounded-2xl inline-block max-w-md border border-red-100 shadow-sm">
+                    <AlertTriangle className="mx-auto mb-4" size={48} />
+                    <h2 className="text-xl font-bold mb-2">Something went wrong</h2>
+                    <p className="text-sm opacity-90">{error}</p>
+                    <button 
+                        onClick={() => window.location.reload()}
+                        className="mt-6 px-6 py-2 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200"
+                    >
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    const { summary, userBreakdown, requestBreakdown, outageBreakdown, recentActivity } = stats;
+
+    const cards = [
+        { title: 'Total Users', value: summary.totalUsers, icon: <Users />, color: 'blue', trend: '+12%' },
+        { title: 'Pending Requests', value: summary.pendingRequests, icon: <Clock />, color: 'amber', trend: 'Critical' },
+        { title: 'Total Outages', value: summary.totalOutages, icon: <AlertTriangle />, color: 'red', trend: 'Active' },
+        { title: 'Completed', value: summary.completedRequests, icon: <CheckCircle />, color: 'green', trend: '94% Success' },
     ];
 
-    // Data for the graph
-    const data = [
-        { name: 'Total Users', value: 1245 },
-        { name: 'Active Technicians', value: 45 },
-        { name: 'Active Outages', value: 23 },
-        { name: 'Pending Requests', value: 156 },
-    ];
-
-    // Recent activities
-    const recentActivities = [
-        { user: 'Tech #023', action: 'Completed task #T-456', time: '10 min ago' },
-        { user: 'Supervisor', action: 'Assigned 5 new tasks', time: '25 min ago' },
-        { user: 'Hospital Customer', action: 'Submitted urgent request', time: '1 hour ago' },
-        { user: 'System', action: 'Generated daily report', time: '2 hours ago' },
-    ];
-
-    // Quick actions
-    const quickActions = [
-        { icon: <UserPlus />, label: 'Add Staff', link: '/admin/register-staff', color: 'blue' },
-        { icon: <Bell />, label: 'Send Alert', link: '/admin/notices', color: 'red' },
-        { icon: <BarChart />, label: 'Generate Report', link: '/admin/reports', color: 'green' },
-        { icon: <Users />, label: 'Manage Users', link: '/admin/manage-accounts', color: 'purple' },
-    ];
+    const pieData = Object.entries(userBreakdown).map(([name, value]) => ({ name, value }));
+    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
     return (
-        <div className="p-6">
-            {/* Stats Grid Removed as per request */}
+        <div className="space-y-8 animate-fade-in">
+            {/* Header */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">System Overview</h1>
+                <p className="text-gray-500 font-medium">Real-time performance metrics and system health.</p>
+            </div>
 
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {cards.map((card, idx) => (
+                    <div key={idx} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300 group">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className={`p-3 rounded-2xl bg-${card.color}-50 text-${card.color}-600 group-hover:scale-110 transition-transform duration-300`}>
+                                {card.icon}
+                            </div>
+                            <span className={`text-xs font-bold px-2 py-1 rounded-lg bg-${card.color}-50 text-${card.color}-600`}>
+                                {card.trend}
+                            </span>
+                        </div>
+                        <h3 className="text-gray-500 text-sm font-bold uppercase tracking-wider mb-1">{card.title}</h3>
+                        <div className="text-3xl font-black text-gray-900">{card.value}</div>
+                    </div>
+                ))}
+            </div>
 
-            {/* System Overview Graph */}
-            <div className="bg-white rounded-xl shadow p-6 mb-8">
-                <h2 className="text-xl font-bold mb-6">System Overview</h2>
-                <div className="h-80 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <RechartsBarChart
-                            data={data}
-                            margin={{
-                                top: 5,
-                                right: 30,
-                                left: 20,
-                                bottom: 5,
-                            }}
-                        >
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" />
-                            <YAxis />
-                            <Tooltip />
-                            <Legend />
-                            <Bar dataKey="value" fill="#2563eb" barSize={50} />
-                        </RechartsBarChart>
-                    </ResponsiveContainer>
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Activity Graph */}
+                <div className="lg:col-span-2 bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                <TrendingUp className="text-blue-600" size={24} />
+                                Request Activity
+                            </h2>
+                            <p className="text-sm text-gray-500 font-medium">Daily service requests volume</p>
+                        </div>
+                        <select className="bg-gray-50 border-none rounded-xl text-sm font-bold text-gray-600 px-4 py-2 outline-none cursor-pointer">
+                            <option>Last 7 Days</option>
+                            <option>Last 30 Days</option>
+                        </select>
+                    </div>
+                    
+                    <div className="h-80 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={recentActivity}>
+                                <defs>
+                                    <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis 
+                                    dataKey="date" 
+                                    axisLine={false} 
+                                    tickLine={false} 
+                                    tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 600}} 
+                                    dy={10}
+                                    tickFormatter={(str) => new Date(str).toLocaleDateString([], {weekday: 'short'})}
+                                />
+                                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 600}} />
+                                <Tooltip 
+                                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                                    itemStyle={{fontWeight: 700, color: '#3b82f6'}}
+                                />
+                                <Area type="monotone" dataKey="requests" stroke="#3b82f6" strokeWidth={4} fillOpacity={1} fill="url(#colorRequests)" />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* User Breakdown */}
+                <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col">
+                    <h2 className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+                        <Activity className="text-purple-600" size={24} />
+                        User Distribution
+                    </h2>
+                    <p className="text-sm text-gray-500 font-medium mb-6">By account type</p>
+                    
+                    <div className="h-64 w-full relative">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={80}
+                                    paddingAngle={8}
+                                    dataKey="value"
+                                >
+                                    {pieData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} cornerRadius={4} />
+                                    ))}
+                                </Pie>
+                                <Tooltip 
+                                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                                />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        {/* Center Label */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                            <div className="text-2xl font-black text-gray-900">{summary.totalUsers}</div>
+                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total</div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3 mt-4">
+                        {pieData.map((entry, index) => (
+                            <div key={index} className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full" style={{backgroundColor: COLORS[index % COLORS.length]}}></div>
+                                    <span className="text-sm font-bold text-gray-600 capitalize">{entry.name}</span>
+                                </div>
+                                <span className="text-sm font-black text-gray-900">{entry.value}</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Quick Actions */}
-                <div className="lg:col-span-2">
-                    <div className="bg-white rounded-xl shadow p-6">
-                        <h2 className="text-xl font-bold mb-6">Quick Actions</h2>
-                        <div className="grid grid-cols-2 gap-4">
-                            {quickActions.map((action, idx) => (
-                                <Link
-                                    key={idx}
-                                    to={action.link}
-                                    className={`p-4 rounded-xl border-2 border-${action.color}-200 bg-${action.color}-50 hover:bg-${action.color}-100 transition flex items-center`}
-                                >
-                                    <div className={`p-2 rounded-lg bg-${action.color}-100 text-${action.color}-600 mr-3`}>
-                                        {action.icon}
-                                    </div>
-                                    <div>
-                                        <div className="font-bold">{action.label}</div>
-                                        <div className="text-sm text-gray-600 flex items-center">
-                                            Click to proceed <ChevronRight size={16} className="ml-1" />
-                                        </div>
-                                    </div>
-                                </Link>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Recent Activities */}
-                    <div className="bg-white rounded-xl shadow p-6 mt-6">
-                        <h2 className="text-xl font-bold mb-6">Recent Activities</h2>
-                        <div className="space-y-4">
-                            {recentActivities.map((activity, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded">
-                                    <div>
-                                        <div className="font-medium">{activity.user}</div>
-                                        <div className="text-gray-600 text-sm">{activity.action}</div>
-                                    </div>
-                                    <div className="text-gray-500 text-sm">{activity.time}</div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+            {/* System Health */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 rounded-[2rem] text-white shadow-xl shadow-blue-200 overflow-hidden relative group">
+                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                    <ShieldCheck size={160} />
                 </div>
-
-                {/* Right Column - Activity */}
-                <div className="space-y-8">
-                    {/* Recent Activity */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <h2 className="text-xl font-bold mb-4">Recent Activity</h2>
-                        <div className="space-y-4">
-                            {[1, 2, 3].map((i) => (
-                                <div key={i} className="flex items-start space-x-3 p-3 hover:bg-gray-50 rounded-lg transition">
-                                    <div className="w-2 h-2 rounded-full bg-blue-500 mt-2"></div>
-                                    <div>
-                                        <p className="text-sm font-medium">New customer registration</p>
-                                        <p className="text-xs text-gray-500">2 minutes ago</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Emergency Controls */}
-                    <div className="bg-white rounded-xl shadow p-6 mt-6 border-2 border-red-200">
-                        <h2 className="text-xl font-bold mb-4 text-red-600 flex items-center">
-                            <AlertTriangle className="mr-2" /> Emergency Controls
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="max-w-xl">
+                        <h2 className="text-2xl font-black mb-2 flex items-center gap-3">
+                            <Activity className="animate-pulse" />
+                            System Health: Optimized
                         </h2>
-                        <div className="space-y-3">
-                            <button className="w-full py-2 bg-red-600 text-white rounded hover:bg-red-700">
-                                Broadcast Emergency Alert
-                            </button>
-                            <button className="w-full py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">
-                                Initiate System Backup
-                            </button>
-                            <button className="w-full py-2 bg-gray-800 text-white rounded hover:bg-gray-900">
-                                System Maintenance Mode
-                            </button>
+                        <p className="text-blue-100 font-medium">
+                            The PowerLink system is currently processing requests at peak efficiency. 
+                            Active technicians are responding within the target SLA window.
+                        </p>
+                    </div>
+                    <div className="flex gap-4">
+                        <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-blue-200 mb-1">Active Techs</div>
+                            <div className="text-2xl font-black">{summary.activeTechnicians}</div>
+                        </div>
+                        <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-blue-200 mb-1">Load Status</div>
+                            <div className="text-2xl font-black">Low</div>
                         </div>
                     </div>
                 </div>

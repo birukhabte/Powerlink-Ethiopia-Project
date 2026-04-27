@@ -8,7 +8,7 @@ const router = express.Router();
 // Register endpoint
 router.post('/register', async (req, res) => {
   try {
-    const { email, username, password, firstName, lastName, userType, phone } = req.body;
+    const { email, username, password, firstName, lastName, userType, phone, specialType, otherSpecialType, bpNumber } = req.body;
 
     // Check if user already exists
     const userExists = await pool.query(
@@ -24,13 +24,15 @@ router.post('/register', async (req, res) => {
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // Determine role - default to 'customer' if not specified
-    const role = userType || 'customer';
+    // Determine role and special customer status
+    const role = userType === 'special' ? 'customer' : (userType || 'customer');
+    const isSpecialCustomer = userType === 'special';
+    const specialTypeValue = isSpecialCustomer ? (specialType === 'other' ? otherSpecialType : specialType) : null;
 
     // Insert new user
     const newUser = await pool.query(
-      'INSERT INTO users (email, username, password_hash, first_name, last_name, role, phone) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, email, username, first_name, last_name, role',
-      [email, username, passwordHash, firstName, lastName, role, phone || null]
+      'INSERT INTO users (email, username, password_hash, first_name, last_name, role, phone, special_customer, special_type, bp_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, email, username, first_name, last_name, role, special_customer, special_type',
+      [email, username, passwordHash, firstName, lastName, role, phone || null, isSpecialCustomer, specialTypeValue, bpNumber || null]
     );
 
     res.status(201).json({

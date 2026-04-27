@@ -36,17 +36,18 @@ model User {
 }
 
 model Announcement {
-  id         Int       @id @default(autoincrement())
-  title      String    @db.VarChar(255)
-  content    String
-  type       String    @default("info") @db.VarChar(50)
-  priority   Int       @default(1)
-  is_active  Boolean   @default(true)
-  created_by Int?
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now()) @updatedAt
-  expires_at DateTime?
-  creator    User?     @relation("AnnouncementCreatedBy", fields: [created_by], references: [id])
+  id          Int       @id @default(autoincrement())
+  title       String    @db.VarChar(255)
+  content     String
+  type        String    @default("info") @db.VarChar(50)
+  target_role String    @default("all") @db.VarChar(50)
+  priority    Int       @default(1)
+  is_active   Boolean   @default(true)
+  created_by  Int?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @default(now()) @updatedAt
+  expires_at  DateTime?
+  creator     User?     @relation("AnnouncementCreatedBy", fields: [created_by], references: [id])
 
   @@map("announcement1")
 }
@@ -64,6 +65,8 @@ model OutageReport {
   estimated_affected String?   @db.VarChar(100)
   reason             String?
   technician_notes   String?
+  evidence_image     String?
+  estimated_time     String?   @db.VarChar(100)
   reported_by        Int?
   assigned_to        Int?
   scheduled_date     DateTime?
@@ -87,11 +90,16 @@ model ServiceRequest {
   house_plot_number String?   @db.VarChar(100)
   nearby_landmark   String?   @db.VarChar(255)
   full_address      String
+  latitude           Decimal?  @db.Decimal(10, 8)
+  longitude          Decimal?  @db.Decimal(11, 8)
   documents         Json?
+  evidence_image     String?
+  estimated_time     String?   @db.VarChar(100)
   status            String    @default("pending") @db.VarChar(50)
   priority          String    @default("medium") @db.VarChar(50)
   assigned_to       Int?
   supervisor_notes  String?
+  technician_notes  String?
   created_by        Int?
   scheduled_date    DateTime?
   created_at        DateTime  @default(now())

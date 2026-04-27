@@ -154,7 +154,7 @@ try {
     console.log(gitStatus);
     console.log('   Consider committing before deployment');
   }
-} catch (error) {
+} catch {
   console.log('⚠️  Could not check git status (not a git repo?)');
 }
 
@@ -171,6 +171,7 @@ if (allChecksPassed) {
 } else {
   console.log('\n❌ Some checks failed!');
   console.log('\nPlease fix the issues above before deploying.');
+  // eslint-disable-next-line no-undef
   process.exit(1);
 }
 

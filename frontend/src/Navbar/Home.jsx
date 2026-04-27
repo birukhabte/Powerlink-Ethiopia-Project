@@ -37,14 +37,6 @@ const Home = () => {
         return () => clearInterval(interval);
     }, [galleryImages.length]);
 
-    // Debug logging
-    console.log('🏠 Home component - Announcements state:', {
-        announcements,
-        loading,
-        error,
-        count: announcements.length
-    });
-
     const translations = {
         en: {
             home: 'Home',

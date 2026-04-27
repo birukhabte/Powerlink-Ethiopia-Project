@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const prisma = require('../config/prisma');
+const pool = require('../config/database');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 
 /**
@@ -11,63 +11,73 @@ const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 router.get('/technician', authenticateToken, authorizeRoles('technician'), async (req, res) => {
   try {
     const userId = req.user.userId;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    
+    // Fetch both service requests and outage reports assigned to this technician
+    const [serviceTasksResult, outageTasksResult] = await Promise.all([
+      pool.query(`
+        SELECT 'service_request' as type, * FROM service_requests 
+        WHERE assigned_to = $1 
+        ORDER BY created_at DESC
+      `, [userId]),
+      pool.query(`
+        SELECT 'outage_report' as type, * FROM outage_reports 
+        WHERE assigned_to = $1 
+        ORDER BY created_at DESC
+      `, [userId])
+    ]);
 
-    // Fetch tasks assigned to this technician
-    const tasks = await prisma.serviceRequest.findMany({
-      where: {
-        assigned_to: userId,
-      },
-      orderBy: [
-        { priority: 'asc' }, // You might need a custom sort for high/medium/low string values
-        { created_at: 'desc' },
-      ],
-      include: {
-        creator: {
-          select: {
-            first_name: true,
-            last_name: true,
-          }
-        }
-      }
-    });
+    const allTasks = [...serviceTasksResult.rows, ...outageTasksResult.rows];
+
+    // Fetch schedule (upcoming tasks)
+    const scheduleResult = await pool.query(`
+      SELECT 'service_request' as type, sr.id, sr.ticket_id, sr.scheduled_date,
+             sr.city, sr.woreda, sr.service_type
+      FROM service_requests sr
+      WHERE assigned_to = $1 AND scheduled_date >= NOW()
+      UNION
+      SELECT 'outage_report' as type, o.id, ('OUT-' || o.id)::text as ticket_id, o.scheduled_date,
+             null as city, null as woreda, o.outage_type as service_type
+      FROM outage_reports o
+      WHERE assigned_to = $1 AND scheduled_date >= NOW()
+      ORDER BY scheduled_date ASC LIMIT 5
+    `, [userId]);
 
     // Calculate stats
-    const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(t => t.status === 'completed').length;
-    const pendingTasks = tasks.filter(t => t.status === 'assigned' || t.status === 'in_progress').length;
-    
-    // Tasks scheduled for today
-    const tasksToday = tasks.filter(t => {
-      if (!t.scheduled_date) return false;
-      const scheduledDate = new Date(t.scheduled_date);
-      scheduledDate.setHours(0, 0, 0, 0);
-      return scheduledDate.getTime() === today.getTime();
-    }).length;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const assigned = allTasks.filter(t => t.status === 'assigned' || t.status === 'pending').length;
+    const in_progress = allTasks.filter(t => ['in_progress', 'traveling', 'assessment', 'waiting_parts'].includes(t.status)).length;
+    const completed_today = allTasks.filter(t =>
+      (t.status === 'completed' || t.status === 'resolved') &&
+      new Date(t.updated_at) >= today &&
+      new Date(t.updated_at) < tomorrow
+    ).length;
+    const upcoming = scheduleResult.rows.length;
 
     res.json({
       success: true,
       data: {
         stats: {
-          tasksToday: tasksToday || totalTasks, // Fallback if no specific scheduling
-          completed: `${completedTasks}/${totalTasks}`,
-          avgTime: '1.2 hrs', // This would need actual tracking logic
-          rating: '4.8/5',    // This would need a rating system
+          assigned,
+          in_progress,
+          completed_today
         },
-        tasks: tasks.map(t => ({
-          id: t.ticket_id,
+        assignedTasks: allTasks.slice(0, 5).map(t => ({
+          id: t.ticket_id || `OUT-${t.id}`,
           db_id: t.id,
-          location: `${t.city || ''}, ${t.woreda || ''}`,
-          type: t.service_type,
-          status: t.status === 'assigned' ? 'Pending' : 
-                  t.status === 'in_progress' ? 'In Progress' : 
-                  t.status === 'completed' ? 'Completed' : t.status,
-          priority: t.priority.charAt(0).toUpperCase() + t.priority.slice(1),
-          time: t.scheduled_date ? new Date(t.scheduled_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Flexible',
-          full_address: t.full_address,
-          customer_name: t.full_name
-        }))
+          type: t.type,
+          location: t.type === 'service_request' ? 
+            `${t.city || ''}, ${t.woreda || ''}` : 
+            t.address || 'Location not specified',
+          task_type: t.type === 'service_request' ? t.service_type : t.outage_type,
+          status: t.status,
+          priority: t.priority || t.urgency,
+          created_at: t.created_at
+        })),
+        schedule: scheduleResult.rows
       }
     });
   } catch (error) {
@@ -83,43 +93,38 @@ router.get('/technician', authenticateToken, authorizeRoles('technician'), async
  */
 router.get('/supervisor', authenticateToken, authorizeRoles('supervisor', 'admin'), async (req, res) => {
   try {
-    // Fetch all pending and under_review requests
-    const pendingRequests = await prisma.serviceRequest.findMany({
-      where: {
-        status: {
-          in: ['pending', 'under_review']
-        }
-      },
-      orderBy: {
-        created_at: 'asc'
-      }
-    });
+    const [requestsResult, outagesResult, approvedResult, assignedResult, inProgressResult, completedResult, techsResult] = await Promise.all([
+      pool.query("SELECT * FROM service_requests WHERE status IN ('pending', 'under_review') ORDER BY created_at ASC LIMIT 5"),
+      pool.query("SELECT * FROM outage_reports WHERE status = 'pending' ORDER BY created_at ASC LIMIT 5"),
+      pool.query("SELECT COUNT(*) FROM service_requests WHERE status = 'approved'"),
+      pool.query("SELECT COUNT(*) FROM service_requests WHERE status = 'assigned'"),
+      pool.query("SELECT COUNT(*) FROM service_requests WHERE status = 'in_progress'"),
+      pool.query("SELECT COUNT(*) FROM service_requests WHERE status = 'completed'"),
+      pool.query("SELECT id, first_name, last_name FROM users WHERE role = 'technician' AND is_active = true")
+    ]);
 
-    // Fetch active technicians count (users with role 'technician' and is_active true)
-    const activeTechniciansCount = await prisma.user.count({
-      where: {
-        role: 'technician',
-        is_active: true
-      }
-    });
+    const pendingServiceRequests = requestsResult.rows.length;
+    const pendingOutages = outagesResult.rows.length;
+    const approvedRequests = parseInt(approvedResult.rows[0].count);
+    const assignedTasks = parseInt(assignedResult.rows[0].count);
+    const inProgressTasks = parseInt(inProgressResult.rows[0].count);
+    const completedTasks = parseInt(completedResult.rows[0].count);
 
-    const totalTechnicians = await prisma.user.count({
-      where: { role: 'technician' }
-    });
-
-    // Stats for supervisor
     const stats = {
-      pendingValidations: pendingRequests.length,
-      activeTechnicians: `${activeTechniciansCount}/${totalTechnicians}`,
-      openRequests: pendingRequests.length,
-      avgResponseTime: '1.5 hrs' // Placeholder
+      total: pendingServiceRequests + pendingOutages,
+      pending: pendingServiceRequests + pendingOutages,
+      assigned: assignedTasks,
+      in_progress: inProgressTasks,
+      completed: completedTasks
     };
 
     res.json({
       success: true,
       data: {
         stats,
-        requests: pendingRequests
+        pendingRequests: requestsResult.rows,
+        pendingOutages: outagesResult.rows,
+        activeTechnicians: techsResult.rows
       }
     });
   } catch (error) {

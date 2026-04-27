@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Home,
@@ -11,7 +11,10 @@ import {
     AlertCircle,
     Send,
     X,
-    Zap
+    Zap,
+    MapPin,
+    Navigation,
+    Target
 } from 'lucide-react';
 import { API_ENDPOINTS } from '../../config/api';
 
@@ -21,6 +24,7 @@ const RequestService = () => {
     const [selectedService, setSelectedService] = useState('');
     const [errors, setErrors] = useState({});
     const [submitted, setSubmitted] = useState(false);
+    const [gettingLocation, setGettingLocation] = useState(false);
 
     const [formData, setFormData] = useState({
         serviceType: '',
@@ -31,8 +35,9 @@ const RequestService = () => {
         housePlotNumber: '',
         nearbyLandmark: '',
         phone: '',
+        latitude: null,
+        longitude: null,
         documents: [],
-        // Separate document fields for new-service
         idCopy: null,
         propertyProof: null,
         sitePlan: null,
@@ -48,7 +53,7 @@ const RequestService = () => {
     ];
 
     const requiredDocuments = {
-        'new-service': ['Combined Document (ID Copy, Proof of Property Ownership/Lease, Site Plan, Building Permit)'],
+        'new-service': ['ID Copy', 'Proof of Property Ownership/Lease', 'Site Plan', 'Building Permit'],
         relocation: ['ID Copy', 'Proof of Address', 'Previous Bill'],
         'name-change': ['ID Copy', 'Legal Document', 'Authorization Letter'],
         'tariff-change': ['ID Copy', 'Application Form'],
@@ -56,8 +61,62 @@ const RequestService = () => {
     };
 
     const [generatedTicketId, setGeneratedTicketId] = useState('');
-
     const [submitting, setSubmitting] = useState(false);
+
+    const getCurrentLocation = () => {
+        if (!navigator.geolocation) {
+            alert('Geolocation is not supported by your browser. Please update your browser or use a different device.');
+            return;
+        }
+
+        // Check if we're in a secure context (HTTPS) - allow localhost for development
+        if (window.location.protocol !== 'https:' &&
+            window.location.hostname !== 'localhost' &&
+            window.location.hostname !== '127.0.0.1') {
+            alert('Location services work best with a secure connection (HTTPS). For development, localhost is allowed. If you\'re having issues, try enabling location permissions in your browser.');
+        }
+
+        setGettingLocation(true);
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setFormData(prev => ({
+                    ...prev,
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude
+                }));
+                setGettingLocation(false);
+                alert('Location captured successfully!');
+            },
+            (error) => {
+                console.error('Error getting location:', error);
+                setGettingLocation(false);
+
+                // Provide specific error messages based on error code
+                let errorMessage = 'Could not capture location. ';
+                switch (error.code) {
+                    case error.PERMISSION_DENIED:
+                        errorMessage += 'Location access was denied. Please enable location permissions in your browser settings and try again.';
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        errorMessage += 'Location information is unavailable. Please check that location services are enabled on your device.';
+                        break;
+                    case error.TIMEOUT:
+                        errorMessage += 'Location request timed out. Please try again.';
+                        break;
+                    default:
+                        errorMessage += 'An unknown error occurred. Please try again or enter coordinates manually.';
+                        break;
+                }
+
+                alert(errorMessage);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 15000, // 15 seconds timeout
+                maximumAge: 60000 // Accept cached position up to 1 minute old
+            }
+        );
+    };
 
     const handleFileUpload = (e) => {
         const files = Array.from(e.target.files);
@@ -79,21 +138,17 @@ const RequestService = () => {
         e.preventDefault();
         const newErrors = {};
 
-        // Validate required fields
         if (!formData.fullName) newErrors.fullName = 'Full name is required';
         if (!formData.woreda) newErrors.woreda = 'Woreda is required';
         if (!formData.kebele) newErrors.kebele = 'Kebele is required';
         if (!formData.phone) newErrors.phone = 'Phone number is required';
 
-        // Validate that document is uploaded
         if (selectedService === 'new-service') {
-            // For new service, check separate documents
             if (!formData.idCopy) newErrors.idCopy = 'ID Copy is required';
             if (!formData.propertyProof) newErrors.propertyProof = 'Property Proof is required';
             if (!formData.sitePlan) newErrors.sitePlan = 'Site Plan is required';
             if (!formData.buildingPermit) newErrors.buildingPermit = 'Building Permit is required';
         } else {
-            // For other services, check combined documents
             if (formData.documents.length === 0) {
                 newErrors.documents = 'Please upload the required document';
             }
@@ -110,18 +165,16 @@ const RequestService = () => {
             const ticketId = `SRV-2024-${Math.floor(Math.random() * 10000).toString().padStart(5, '0')}`;
             setGeneratedTicketId(ticketId);
 
-            // Step 1: Upload files to server
+            // 1. Upload files
             const uploadFormData = new FormData();
             uploadFormData.append('ticketId', ticketId);
             
             if (selectedService === 'new-service') {
-                // Upload separate documents with specific field names
                 if (formData.idCopy) uploadFormData.append('idCopy', formData.idCopy);
                 if (formData.propertyProof) uploadFormData.append('propertyProof', formData.propertyProof);
                 if (formData.sitePlan) uploadFormData.append('sitePlan', formData.sitePlan);
                 if (formData.buildingPermit) uploadFormData.append('buildingPermit', formData.buildingPermit);
             } else {
-                // Upload combined documents
                 formData.documents.forEach((file) => {
                     uploadFormData.append('documents', file);
                 });
@@ -133,32 +186,18 @@ const RequestService = () => {
             });
 
             const uploadData = await uploadResponse.json();
-
-            if (!uploadData.success) {
-                throw new Error(uploadData.error || 'Failed to upload documents');
-            }
-
-            // Use the uploaded document metadata with file paths
-            const documentMetadata = uploadData.documents;
+            if (!uploadData.success) throw new Error(uploadData.error || 'Upload failed');
 
             const addressParts = [];
-            if (formData.housePlotNumber) addressParts.push(`House/Plot: ${formData.housePlotNumber}`);
-            addressParts.push(`Kebele: ${formData.kebele}`);
-            addressParts.push(`Woreda: ${formData.woreda}`);
-            addressParts.push(`City: ${formData.city}`);
+            if (formData.housePlotNumber) addressParts.push(`H/P: ${formData.housePlotNumber}`);
+            addressParts.push(`Keb: ${formData.kebele}, Wor: ${formData.woreda}, ${formData.city}`);
             if (formData.nearbyLandmark) addressParts.push(`Landmark: ${formData.nearbyLandmark}`);
             const fullAddress = addressParts.join(', ');
 
-
-            // Get user from localStorage if available
             const user = JSON.parse(localStorage.getItem('user') || 'null');
             const userId = user?.id || null;
 
-            console.log('=== SERVICE REQUEST SUBMISSION DEBUG ===');
-            console.log('User from localStorage:', user);
-            console.log('User ID:', userId);
-
-            // Step 2: Prepare request data with document paths - using camelCase to match backend API
+            // 2. Submit Request
             const requestData = {
                 ticketId: ticketId,
                 serviceType: selectedService,
@@ -170,63 +209,46 @@ const RequestService = () => {
                 housePlotNumber: formData.housePlotNumber || null,
                 nearbyLandmark: formData.nearbyLandmark || null,
                 fullAddress: fullAddress,
-                documents: documentMetadata,
+                latitude: formData.latitude,
+                longitude: formData.longitude,
+                documents: uploadData.documents,
                 createdBy: userId
             };
 
-            console.log('Request data being sent:', requestData);
-
-            // Step 3: Send service request to backend API
             const response = await fetch(API_ENDPOINTS.serviceRequests.base, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestData)
             });
 
             const data = await response.json();
-            console.log('Backend response:', data);
-
             if (data.success) {
-                console.log('✅ Service request submitted successfully!');
-                console.log('Ticket ID:', ticketId);
-                console.log('Created by user ID:', userId);
-                console.log('Request will be visible in Track Ticket page');
-
                 setSubmitted(true);
-                setErrors({});
             } else {
-                throw new Error(data.error || 'Failed to submit request');
+                throw new Error(data.error || 'Submission failed');
             }
         } catch (error) {
-            console.error('❌ Error submitting service request:', error);
-            setErrors({ submit: error.message || 'Failed to submit request. Please try again.' });
+            console.error('Submission error:', error);
+            setErrors({ submit: error.message });
         } finally {
             setSubmitting(false);
         }
     };
 
-
     if (submitted) {
         return (
-            <div className="flex items-center justify-center p-6 bg-white min-h-[60vh] rounded-2xl">
-                <div className="max-w-md text-center">
-                    <CheckCircle className="mx-auto text-green-500 mb-4 animate-bounce" size={64} />
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Request Submitted!</h2>
-                    <p className="text-gray-600 mb-4 font-semibold text-lg">Ticket #{generatedTicketId}</p>
-                    <div className="bg-blue-50 p-6 rounded-xl mb-6 text-left border border-blue-100">
-                        <ul className="space-y-2 text-sm text-blue-800">
-                            <li className="flex items-center"><CheckCircle size={16} className="mr-2 text-blue-600" /> Ticket saved to your account</li>
-                            <li className="flex items-center"><CheckCircle size={16} className="mr-2 text-blue-600" /> Sent to supervisor for validation</li>
-                            <li className="flex items-center"><CheckCircle size={16} className="mr-2 text-blue-600" /> You can track status updates anytime</li>
-                        </ul>
-                    </div>
-                    <button
-                        onClick={() => navigate('/ticket')}
-                        className="w-full py-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold shadow-lg transform hover:scale-105 transition-all"
-                    >
-                        Track Your Request
+            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-3xl shadow-xl max-w-md mx-auto text-center border border-slate-100">
+                <div className="bg-emerald-50 w-20 h-20 rounded-full flex items-center justify-center mb-6">
+                    <CheckCircle className="text-emerald-500" size={48} />
+                </div>
+                <h2 className="text-3xl font-black text-slate-900 mb-2">Request Filed!</h2>
+                <p className="text-slate-500 font-bold text-lg mb-8">TICKET: {generatedTicketId}</p>
+                <div className="w-full space-y-4">
+                    <button onClick={() => navigate('/ticket')} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all">
+                        TRACK PROGRESS
+                    </button>
+                    <button onClick={() => window.location.reload()} className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all">
+                        FILE ANOTHER
                     </button>
                 </div>
             </div>
@@ -234,382 +256,174 @@ const RequestService = () => {
     }
 
     return (
-        <div className="max-w-4xl mx-auto">
-            {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-800 mb-2">Request Service</h1>
-                <p className="text-gray-600">Select and request additional services</p>
-            </div>
+        <div className="max-w-4xl mx-auto p-4 md:p-0">
+            <header className="mb-10">
+                <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">SERVICE APPLICATIONS</h1>
+                <p className="text-slate-500 font-medium">Select a service and provide the required information</p>
+            </header>
 
-            {/* Steps */}
-            <div className="flex justify-between mb-8 max-w-2xl">
-                <div className={`text-center ${step >= 1 ? 'text-blue-600' : 'text-gray-400'}`}>
-                    <div className="w-10 h-10 mx-auto rounded-full border-2 flex items-center justify-center mb-2 border-blue-600">1</div>
-                    <div className="font-medium">Select Service</div>
-                </div>
-                <div className={`text-center ${step >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
-                    <div className="w-10 h-10 mx-auto rounded-full border-2 flex items-center justify-center mb-2">2</div>
-                    <div className="font-medium">Fill Form</div>
-                </div>
-                <div className={`text-center ${step >= 3 ? 'text-blue-600' : 'text-gray-400'}`}>
-                    <div className="w-10 h-10 mx-auto rounded-full border-2 flex items-center justify-center mb-2">3</div>
-                    <div className="font-medium">Submit</div>
-                </div>
-            </div>
-
-            {/* Step 1: Select Service */}
-            {step === 1 && (
-                <div className="bg-white rounded-xl shadow p-6">
-                    <h2 className="text-xl font-bold mb-6">Choose a Service</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {services.map((service) => (
-                            <div
-                                key={service.id}
-                                onClick={() => {
-                                    setSelectedService(service.id);
-                                    setFormData({ ...formData, serviceType: service.id });
-                                    setStep(2);
-                                }}
-                                className={`p-6 border-2 rounded-xl cursor-pointer transition ${selectedService === service.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'
-                                    }`}
-                            >
-                                <div className="flex items-center mb-3">
-                                    <div className="p-2 bg-blue-100 text-blue-600 rounded-lg mr-3">
-                                        {service.icon}
-                                    </div>
-                                    <div className="font-bold text-gray-800">{service.label}</div>
-                                </div>
-                                <p className="text-gray-600 text-sm">{service.description}</p>
-                            </div>
-                        ))}
+            {/* Steps Visualizer */}
+            <div className="flex items-center gap-4 mb-12">
+                {[1, 2, 3].map((s) => (
+                    <div key={s} className="flex items-center gap-2">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs transition-all ${step >= s ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                            {s}
+                        </div>
+                        {s < 3 && <div className={`w-12 h-1 bg-slate-200 rounded-full ${step > s ? 'bg-blue-600' : ''}`}></div>}
                     </div>
+                ))}
+            </div>
+
+            {step === 1 && (
+                <div className="grid md:grid-cols-2 gap-4">
+                    {services.map((s) => (
+                        <div key={s.id} onClick={() => { setSelectedService(s.id); setFormData(f => ({ ...f, serviceType: s.id })); setStep(2); }} className="bg-white p-6 rounded-3xl border-2 border-transparent shadow-sm hover:border-blue-500 hover:shadow-xl transition-all cursor-pointer group">
+                            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                {s.icon}
+                            </div>
+                            <h3 className="font-black text-slate-900 mb-1 uppercase tracking-tighter">{s.label}</h3>
+                            <p className="text-slate-500 text-xs font-medium">{s.description}</p>
+                        </div>
+                    ))}
                 </div>
             )}
 
-            {/* Step 2: Service Form */}
             {step === 2 && (
-                <div className="bg-white rounded-xl shadow p-6">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold">
-                            {services.find(s => s.id === selectedService)?.label} Request
+                <div className="bg-white rounded-3xl shadow-xl p-8 border border-slate-100">
+                    <div className="flex justify-between items-center mb-8 pb-4 border-b border-slate-50">
+                        <h2 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">
+                            {services.find(s => s.id === selectedService)?.label} Application
                         </h2>
-                        <button onClick={() => setStep(1)} className="text-gray-500">
+                        <button onClick={() => setStep(1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
                             <X size={20} />
                         </button>
                     </div>
 
-                    <form onSubmit={handleSubmit}>
-                        <div className="space-y-4 mb-6">
+                    <form onSubmit={handleSubmit} className="space-y-8">
+                        {/* Section: Identity */}
+                        <div className="grid md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block mb-2 font-medium">Full Name *</label>
-                                <input
-                                    type="text"
-                                    value={formData.fullName}
-                                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                                    className="w-full p-3 border border-gray-300 rounded-lg"
-                                    placeholder="Your full name"
-                                />
-                                {errors.fullName && <p className="text-red-500 text-sm mt-1">{errors.fullName}</p>}
-                            </div>
-
-                            {/* Address Fields */}
-                            <div className="border-t pt-4 mt-4">
-                                <h3 className="text-lg font-semibold mb-4 text-gray-800">Address Information *</h3>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block mb-2 font-medium">City *</label>
-                                        <input
-                                            type="text"
-                                            value={formData.city}
-                                            disabled
-                                            className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block mb-2 font-medium">Woreda *</label>
-                                        <input
-                                            type="text"
-                                            value={formData.woreda}
-                                            onChange={(e) => setFormData({ ...formData, woreda: e.target.value })}
-                                            className="w-full p-3 border border-gray-300 rounded-lg"
-                                            placeholder="Woreda name"
-                                        />
-                                        {errors.woreda && <p className="text-red-500 text-sm mt-1">{errors.woreda}</p>}
-                                    </div>
-
-                                    <div>
-                                        <label className="block mb-2 font-medium">Kebele *</label>
-                                        <input
-                                            type="text"
-                                            value={formData.kebele}
-                                            onChange={(e) => setFormData({ ...formData, kebele: e.target.value })}
-                                            className="w-full p-3 border border-gray-300 rounded-lg"
-                                            placeholder="Kebele number or name"
-                                        />
-                                        {errors.kebele && <p className="text-red-500 text-sm mt-1">{errors.kebele}</p>}
-                                    </div>
-
-                                    <div>
-                                        <label className="block mb-2 font-medium">House Number or Plot Number</label>
-                                        <input
-                                            type="text"
-                                            value={formData.housePlotNumber}
-                                            onChange={(e) => setFormData({ ...formData, housePlotNumber: e.target.value })}
-                                            className="w-full p-3 border border-gray-300 rounded-lg"
-                                            placeholder="House/Plot number (optional)"
-                                        />
-                                    </div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Customer Full Name</label>
+                                <div className="relative">
+                                    <input type="text" value={formData.fullName} onChange={(e) => setFormData(f => ({ ...f, fullName: e.target.value }))} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 outline-none transition-all pl-12" placeholder="As shown on ID" />
+                                    <User className="absolute left-4 top-4 text-slate-400" size={18} />
                                 </div>
-
-                                <div className="mt-4">
-                                    <label className="block mb-2 font-medium">Nearby Landmark</label>
-                                    <input
-                                        type="text"
-                                        value={formData.nearbyLandmark}
-                                        onChange={(e) => setFormData({ ...formData, nearbyLandmark: e.target.value })}
-                                        className="w-full p-3 border border-gray-300 rounded-lg"
-                                        placeholder="e.g., Near Bole Medhanealem Church, Next to ABC School (optional)"
-                                    />
-                                </div>
+                                {errors.fullName && <p className="text-red-500 text-[10px] font-bold mt-1 uppercase">{errors.fullName}</p>}
                             </div>
-
                             <div>
-                                <label className="block mb-2 font-medium">Phone Number *</label>
-                                <input
-                                    type="tel"
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    className="w-full p-3 border border-gray-300 rounded-lg"
-                                    placeholder="0912345678"
-                                />
-                                {errors.phone && <p className="text-red-500 text-sm mt-1">{errors.phone}</p>}
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Phone Number</label>
+                                <div className="relative">
+                                    <input type="tel" value={formData.phone} onChange={(e) => setFormData(f => ({ ...f, phone: e.target.value }))} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 outline-none transition-all pl-12" placeholder="0912345678" />
+                                    <Zap className="absolute left-4 top-4 text-slate-400" size={18} />
+                                </div>
+                                {errors.phone && <p className="text-red-500 text-[10px] font-bold mt-1 uppercase">{errors.phone}</p>}
                             </div>
-
                         </div>
 
-                        {/* Document Upload */}
-                        <div className="mb-6">
-                            <div className="flex items-center mb-4">
-                                <FileText className="text-blue-600 mr-2" />
-                                <h3 className="font-bold">Required Documents</h3>
+                        {/* Section: Location */}
+                        <div className="bg-slate-50 p-6 rounded-3xl">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                                    <MapPin size={18} className="text-blue-600" /> SERVICE LOCATION
+                                </h3>
+                                <div className="flex gap-2">
+                                    <button type="button" onClick={getCurrentLocation} disabled={gettingLocation} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${gettingLocation ? 'bg-slate-200 text-slate-400' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-100'}`}>
+                                        {gettingLocation ? 'ACQUIRING GPS...' : <><Navigation size={14} /> AUTO-CAPTURE LOCATION</>}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const lat = prompt('Enter latitude (e.g., 9.1450):');
+                                            const lng = prompt('Enter longitude (e.g., 38.7521):');
+                                            if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    latitude: parseFloat(lat),
+                                                    longitude: parseFloat(lng)
+                                                }));
+                                            }
+                                        }}
+                                        className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-xl hover:bg-gray-600 font-black text-[10px] uppercase tracking-widest transition-all"
+                                    >
+                                        <Target size={14} /> MANUAL ENTRY
+                                    </button>
+                                </div>
                             </div>
 
+                            {formData.latitude && (
+                                <div className="mb-6 flex items-center gap-2 bg-emerald-50 text-emerald-700 p-3 rounded-xl border border-emerald-100 text-[10px] font-black uppercase">
+                                    <Target size={14} /> GPS COORDINATES CAPTURED: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 mb-1">CITY</label>
+                                    <input type="text" value={formData.city} disabled className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 mb-1">WOREDA *</label>
+                                    <input type="text" value={formData.woreda} onChange={(e) => setFormData(f => ({ ...f, woreda: e.target.value }))} className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 mb-1">KEBELE *</label>
+                                    <input type="text" value={formData.kebele} onChange={(e) => setFormData(f => ({ ...f, kebele: e.target.value }))} className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 mb-1">H/P NUMBER</label>
+                                    <input type="text" value={formData.housePlotNumber} onChange={(e) => setFormData(f => ({ ...f, housePlotNumber: e.target.value }))} className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section: Documents */}
+                        <div>
+                            <h3 className="font-black text-slate-900 text-sm mb-4 flex items-center gap-2 uppercase tracking-tighter">
+                                <FileText size={18} className="text-blue-600" /> SUPPORTING DOCUMENTATION
+                            </h3>
                             {selectedService === 'new-service' ? (
-                                <div className="space-y-4">
-                                    <div className="bg-blue-50 p-4 rounded-lg mb-4 border border-blue-200">
-                                        <p className="text-sm text-blue-800 font-medium">
-                                            For <strong>{services.find(s => s.id === selectedService)?.label}</strong>, please upload each document separately:
-                                        </p>
-                                    </div>
-
-                                    {/* ID Copy */}
-                                    <div>
-                                        <label className="block mb-2 font-medium text-gray-700">1. ID Copy *</label>
-                                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex-1">
-                                                    <input
-                                                        type="file"
-                                                        accept=".pdf,.jpg,.jpeg,.png"
-                                                        onChange={(e) => handleSeparateFileUpload('idCopy', e)}
-                                                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                                                    />
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    {['idCopy', 'propertyProof', 'sitePlan', 'buildingPermit'].map((field) => (
+                                        <div key={field} className="relative group">
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">
+                                                {field.replace(/([A-Z])/g, ' $1')} *
+                                            </label>
+                                            <div className={`p-4 border-2 border-dashed rounded-2xl transition-all ${formData[field] ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-blue-400'}`}>
+                                                <input type="file" onChange={(e) => handleSeparateFileUpload(field, e)} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-bold text-slate-500 overflow-hidden text-ellipsis whitespace-nowrap pr-6">
+                                                        {formData[field] ? formData[field].name : 'Drop file or click'}
+                                                    </span>
+                                                    {formData[field] ? <CheckCircle className="text-emerald-500" size={16} /> : <Upload className="text-slate-300" size={16} />}
                                                 </div>
-                                                {formData.idCopy && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeSeparateFile('idCopy')}
-                                                        className="ml-2 text-red-500 hover:text-red-700"
-                                                    >
-                                                        <X size={20} />
-                                                    </button>
-                                                )}
                                             </div>
-                                            {formData.idCopy && (
-                                                <p className="text-sm text-green-600 mt-2 flex items-center">
-                                                    <CheckCircle size={16} className="mr-1" /> {formData.idCopy.name}
-                                                </p>
-                                            )}
+                                            {errors[field] && <p className="text-red-500 text-[10px] font-bold mt-1 uppercase">{errors[field]}</p>}
                                         </div>
-                                        {errors.idCopy && <p className="text-red-500 text-sm mt-1">{errors.idCopy}</p>}
-                                    </div>
-
-                                    {/* Property Proof */}
-                                    <div>
-                                        <label className="block mb-2 font-medium text-gray-700">2. Proof of Property Ownership/Lease *</label>
-                                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex-1">
-                                                    <input
-                                                        type="file"
-                                                        accept=".pdf,.jpg,.jpeg,.png"
-                                                        onChange={(e) => handleSeparateFileUpload('propertyProof', e)}
-                                                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                                                    />
-                                                </div>
-                                                {formData.propertyProof && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeSeparateFile('propertyProof')}
-                                                        className="ml-2 text-red-500 hover:text-red-700"
-                                                    >
-                                                        <X size={20} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                            {formData.propertyProof && (
-                                                <p className="text-sm text-green-600 mt-2 flex items-center">
-                                                    <CheckCircle size={16} className="mr-1" /> {formData.propertyProof.name}
-                                                </p>
-                                            )}
-                                        </div>
-                                        {errors.propertyProof && <p className="text-red-500 text-sm mt-1">{errors.propertyProof}</p>}
-                                    </div>
-
-                                    {/* Site Plan */}
-                                    <div>
-                                        <label className="block mb-2 font-medium text-gray-700">3. Site Plan *</label>
-                                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex-1">
-                                                    <input
-                                                        type="file"
-                                                        accept=".pdf,.jpg,.jpeg,.png"
-                                                        onChange={(e) => handleSeparateFileUpload('sitePlan', e)}
-                                                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                                                    />
-                                                </div>
-                                                {formData.sitePlan && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeSeparateFile('sitePlan')}
-                                                        className="ml-2 text-red-500 hover:text-red-700"
-                                                    >
-                                                        <X size={20} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                            {formData.sitePlan && (
-                                                <p className="text-sm text-green-600 mt-2 flex items-center">
-                                                    <CheckCircle size={16} className="mr-1" /> {formData.sitePlan.name}
-                                                </p>
-                                            )}
-                                        </div>
-                                        {errors.sitePlan && <p className="text-red-500 text-sm mt-1">{errors.sitePlan}</p>}
-                                    </div>
-
-                                    {/* Building Permit */}
-                                    <div>
-                                        <label className="block mb-2 font-medium text-gray-700">4. Building Permit *</label>
-                                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex-1">
-                                                    <input
-                                                        type="file"
-                                                        accept=".pdf,.jpg,.jpeg,.png"
-                                                        onChange={(e) => handleSeparateFileUpload('buildingPermit', e)}
-                                                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                                                    />
-                                                </div>
-                                                {formData.buildingPermit && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeSeparateFile('buildingPermit')}
-                                                        className="ml-2 text-red-500 hover:text-red-700"
-                                                    >
-                                                        <X size={20} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                            {formData.buildingPermit && (
-                                                <p className="text-sm text-green-600 mt-2 flex items-center">
-                                                    <CheckCircle size={16} className="mr-1" /> {formData.buildingPermit.name}
-                                                </p>
-                                            )}
-                                        </div>
-                                        {errors.buildingPermit && <p className="text-red-500 text-sm mt-1">{errors.buildingPermit}</p>}
-                                    </div>
+                                    ))}
                                 </div>
                             ) : (
-                                <>
-                                    <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                                        <p className="text-sm text-gray-700 mb-2">
-                                            For <strong>{services.find(s => s.id === selectedService)?.label}</strong>, please upload:
-                                        </p>
-                                        <ul className="list-disc pl-5 text-sm text-gray-600">
-                                            {requiredDocuments[selectedService]?.map((doc, idx) => (
-                                                <li key={idx}>{doc}</li>
-                                            ))}
-                                        </ul>
+                                <div className="relative p-12 border-4 border-dashed border-slate-100 rounded-3xl text-center hover:border-blue-200 transition-all bg-slate-50/50">
+                                    <input type="file" multiple onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                    <Upload className="mx-auto text-slate-300 mb-4" size={40} />
+                                    <p className="text-slate-600 font-bold mb-2">Drag and drop required files</p>
+                                    <div className="flex flex-wrap justify-center gap-2">
+                                        {requiredDocuments[selectedService]?.map(d => (
+                                            <span key={d} className="bg-white px-3 py-1 rounded-full text-[10px] font-black text-slate-400 border border-slate-100">{d.toUpperCase()}</span>
+                                        ))}
                                     </div>
-
-                                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
-                                        <Upload className="mx-auto text-gray-400 mb-2" size={32} />
-                                        <p className="text-gray-600 mb-2">Upload required documents</p>
-                                        <input
-                                            type="file"
-                                            multiple
-                                            onChange={handleFileUpload}
-                                            className="block mx-auto text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                                        />
-                                        {errors.documents && (
-                                            <p className="text-red-500 text-sm mt-2">{errors.documents}</p>
-                                        )}
-                                    </div>
-
                                     {formData.documents.length > 0 && (
-                                        <div className="mt-4">
-                                            <p className="text-sm font-medium mb-2">Uploaded files:</p>
-                                            {formData.documents.map((file, idx) => (
-                                                <div key={idx} className="flex items-center justify-between bg-gray-50 p-2 rounded mb-1">
-                                                    <span className="text-sm">{file.name}</span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const newDocs = [...formData.documents];
-                                                            newDocs.splice(idx, 1);
-                                                            setFormData({ ...formData, documents: newDocs });
-                                                        }}
-                                                        className="text-red-500"
-                                                    >
-                                                        <X size={16} />
-                                                    </button>
-                                                </div>
+                                        <div className="mt-6 flex flex-wrap gap-2 justify-center">
+                                            {formData.documents.map((f, i) => (
+                                                <span key={i} className="bg-emerald-500 text-white px-3 py-1 rounded-full text-[10px] font-black">{f.name}</span>
                                             ))}
                                         </div>
                                     )}
-                                </>
+                                </div>
                             )}
                         </div>
 
-                        {/* Error Message */}
-                        {Object.keys(errors).length > 0 && (
-                            <div className="bg-red-50 border border-red-200 p-4 rounded-lg mb-6 flex items-center">
-                                <AlertCircle className="text-red-500 mr-3" />
-                                <span className="text-red-600">
-                                    {errors.submit || 'Please fix the errors above before submitting.'}
-                                </span>
-                            </div>
-                        )}
-
-                        {/* Submit Button */}
-                        <button
-                            type="submit"
-                            disabled={submitting}
-                            className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {submitting ? (
-                                <>
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                    Submitting...
-                                </>
-                            ) : (
-                                <>
-                                    <Send className="mr-2" /> Submit Request
-                                </>
-                            )}
+                        <button type="submit" disabled={submitting} className={`w-full py-5 rounded-2xl font-black text-lg uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-3 ${submitting ? 'bg-slate-100 text-slate-400' : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-blue-200 active:scale-95'}`}>
+                            {submitting ? 'PROCESSING APPLICATION...' : <><Send size={24} /> FILE OFFICIAL REQUEST</>}
                         </button>
                     </form>
                 </div>

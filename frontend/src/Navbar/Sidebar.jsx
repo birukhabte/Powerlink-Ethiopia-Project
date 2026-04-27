@@ -15,16 +15,19 @@ import {
     Settings,
     LogOut
 } from 'lucide-react';
+import NotificationBell from '../components/NotificationBell';
 
 const Sidebar = ({ setShowOutageForm, setShowMap, showOutageForm, showMap }) => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const isAdmin = location.pathname.toLowerCase().includes('admin');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const role = user.role || 'customer';
+    const isAdmin = role === 'admin';
 
     const customerMenuItems = [
         { icon: <Home />, label: 'Dashboard', path: '/dashboard', isActive: location.pathname === '/dashboard' && !showOutageForm && !showMap },
-        { icon: <FileText />, label: 'Report Outage', onClick: () => { if (location.pathname !== '/dashboard') navigate('/dashboard'); setTimeout(() => setShowOutageForm && setShowOutageForm(true), 100); }, isActive: showOutageForm },
+        { icon: <FileText />, label: 'Report Outage', onClick: () => { if (location.pathname !== '/dashboard') navigate('/dashboard'); setShowOutageForm(true); }, isActive: showOutageForm },
         { icon: <FileText />, label: 'Track Ticket', path: '/ticket' },
         { icon: <Zap />, label: 'Request Service', path: '/request-service' },
         { icon: <History />, label: 'History', path: '/customer/history' },
@@ -42,7 +45,6 @@ const Sidebar = ({ setShowOutageForm, setShowMap, showOutageForm, showMap }) => 
         { icon: <History />, label: 'History', path: '/admin/history' },
         { icon: <Bell />, label: 'Notifications', path: '/admin/notifications' },
         { icon: <User />, label: 'Profile', path: '/admin/profile' },
-        { icon: <Settings />, label: 'System Settings', path: '/admin/settings' },
     ];
 
     const handleLogout = () => {
@@ -56,24 +58,27 @@ const Sidebar = ({ setShowOutageForm, setShowMap, showOutageForm, showMap }) => 
         { icon: <LogOut />, label: 'Logout', onClick: handleLogout, className: 'text-red-600 hover:bg-red-50 mt-auto' }
     ];
 
-    // Get user from localStorage
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const firstName = user.first_name || user.firstName || 'Customer';
+    const firstName = user.first_name || user.firstName || 'User';
     const displayName = (isAdmin && firstName === 'System') ? 'Admin' : firstName;
     const firstLetter = displayName.charAt(0).toUpperCase();
 
     return (
         <aside className="hidden md:flex flex-col w-64 bg-white h-screen shadow-md p-4 sticky top-0 overflow-y-auto">
+            <div className="mb-4 flex justify-between items-center px-2">
+                <div className="font-black text-xl text-blue-600 tracking-tighter italic">POWERLINK</div>
+                <NotificationBell />
+            </div>
+
             <div className="mb-8 p-4 bg-blue-50 rounded-lg flex items-center space-x-3">
                 <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xl shadow-md">
                     {firstLetter}
                 </div>
-                <div>
-                    <div className="font-bold text-blue-700">
-                        Welcome, {displayName}!
+                <div className="min-w-0">
+                    <div className="font-bold text-blue-700 truncate">
+                        {displayName}
                     </div>
-                    <div className="text-xs text-gray-600">
-                        {isAdmin ? 'System Admin' : 'Valued Customer'}
+                    <div className="text-xs text-gray-600 uppercase tracking-widest font-bold">
+                        {role}
                     </div>
                 </div>
             </div>

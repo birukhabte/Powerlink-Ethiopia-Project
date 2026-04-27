@@ -44,6 +44,8 @@ router.get('/', authenticateToken, async (req, res) => {
         priority: true,
         scheduled_date: true,
         full_address: true,
+        latitude: true,
+        longitude: true,
         created_at: true
       },
       orderBy: { scheduled_date: 'asc' }

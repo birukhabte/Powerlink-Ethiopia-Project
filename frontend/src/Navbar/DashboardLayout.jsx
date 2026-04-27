@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { Menu, Bell, LogOut } from 'lucide-react';
 
 const DashboardLayout = () => {
-    const navigate = useNavigate();
     // These states might need to be context-based if they are used deep in subpages,
     // but for now we'll pass them down or keep them for the dashboard only.
     const [showOutageForm, setShowOutageForm] = useState(false);

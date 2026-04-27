@@ -32,10 +32,21 @@ const ServiceMap = () => {
             });
             if (response.data.success) {
                 // Filter only tasks that have coordinates
-                const tasksWithCoords = response.data.schedule.filter(t => t.extendedProps.latitude && t.extendedProps.longitude);
+                const tasksWithCoords = response.data.schedule.filter(t => {
+                    // For outages, coordinates are in extendedProps
+                    if (t.type === 'outage') {
+                        return t.extendedProps.latitude && t.extendedProps.longitude;
+                    }
+                    // For service requests, coordinates are directly in extendedProps
+                    return t.extendedProps.latitude && t.extendedProps.longitude;
+                });
                 setTasks(tasksWithCoords);
                 if (tasksWithCoords.length > 0) {
-                    setMapCenter([parseFloat(tasksWithCoords[0].extendedProps.latitude), parseFloat(tasksWithCoords[0].extendedProps.longitude)]);
+                    // Use the first task's coordinates as center
+                    const firstTask = tasksWithCoords[0];
+                    const lat = parseFloat(firstTask.extendedProps.latitude);
+                    const lng = parseFloat(firstTask.extendedProps.longitude);
+                    setMapCenter([lat, lng]);
                 }
             }
         } catch (error) {
@@ -45,7 +56,7 @@ const ServiceMap = () => {
         }
     };
 
-    const filteredTasks = tasks.filter(task => 
+    const filteredTasks = tasks.filter(task =>
         task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (task.extendedProps.address && task.extendedProps.address.toLowerCase().includes(searchQuery.toLowerCase()))
     );
@@ -79,8 +90,8 @@ const ServiceMap = () => {
                         <div className="p-10 text-center text-gray-500">No tasks with location found.</div>
                     ) : (
                         filteredTasks.map((task) => (
-                            <div 
-                                key={task.id} 
+                            <div
+                                key={task.id}
                                 className="p-4 border-b border-gray-50 hover:bg-blue-50 transition-colors cursor-pointer"
                                 onClick={() => setMapCenter([parseFloat(task.extendedProps.latitude), parseFloat(task.extendedProps.longitude)])}
                             >
@@ -108,8 +119,8 @@ const ServiceMap = () => {
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     />
                     {filteredTasks.map((task) => (
-                        <Marker 
-                            key={task.id} 
+                        <Marker
+                            key={task.id}
                             position={[parseFloat(task.extendedProps.latitude), parseFloat(task.extendedProps.longitude)]}
                         >
                             <Popup>
@@ -122,7 +133,7 @@ const ServiceMap = () => {
                                         <p className="flex items-center text-gray-600 font-medium">
                                             Status: <span className="ml-2 text-blue-600 uppercase font-bold">{task.extendedProps.status}</span>
                                         </p>
-                                        <button 
+                                        <button
                                             className="w-full mt-3 flex items-center justify-center bg-blue-600 text-white rounded-lg py-2 hover:bg-blue-700 transition-colors gap-2"
                                             onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${task.extendedProps.latitude},${task.extendedProps.longitude}`, '_blank')}
                                         >

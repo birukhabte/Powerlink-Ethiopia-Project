@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Clock,
     CheckCircle,
@@ -9,166 +9,94 @@ import {
     MapPin,
     User,
     Calendar,
-    RefreshCw
+    RefreshCw,
+    Wrench,
+    ArrowRight
 } from 'lucide-react';
 import { API_ENDPOINTS } from '../../config/api';
+import axios from 'axios';
 
 const Ticket = () => {
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [tickets, setTickets] = useState([]);
+    const [outages, setOutages] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState('service'); // 'service' or 'outage'
 
-    // Sample default tickets
-    const defaultTickets = [
-        {
-            id: 'OUT-2024-00123',
-            title: 'Power Outage - Bole Area',
-            status: 'in-progress',
-            created: '2024-01-15 14:30',
-            location: 'Bole, Addis Ababa',
-            description: 'Complete power outage affecting entire street',
-            technician: 'Tech #T-456',
-            priority: 'High',
-            updates: [
-                { time: '14:30', message: 'Outage reported' },
-                { time: '15:15', message: 'Technician assigned' },
-                { time: '16:00', message: 'On-site investigation started' }
-            ]
-        },
-        {
-            id: 'SRV-2024-00089',
-            title: 'New Connection Request',
-            status: 'pending',
-            created: '2024-01-14 10:15',
-            location: 'Kirkos, Addis Ababa',
-            description: 'Request for new electricity connection',
-            technician: 'Not assigned',
-            priority: 'Medium',
-            updates: [
-                { time: '10:15', message: 'Service requested' },
-                { time: '11:00', message: 'Document validation in progress' }
-            ]
-        }
+    const stages = [
+        { key: 'pending', label: 'Waiting', icon: Clock },
+        { key: 'approved', label: 'Approved', icon: CheckCircle },
+        { key: 'assigned', label: 'Assigned', icon: User },
+        { key: 'in_progress', label: 'In Progress', icon: Wrench },
+        { key: 'completed', label: 'Completed', icon: CheckCircle },
+        { key: 'resolved', label: 'Resolved', icon: CheckCircle }
     ];
 
-    React.useEffect(() => {
+    useEffect(() => {
         fetchTickets();
-        // Refresh every 30 seconds to get latest status updates
-        const interval = setInterval(fetchTickets, 30000);
+        fetchOutages();
+        const interval = setInterval(() => {
+            fetchTickets();
+            fetchOutages();
+        }, 30000);
         return () => clearInterval(interval);
     }, []);
 
     const fetchTickets = async () => {
         try {
-            // Get user from localStorage
             const user = JSON.parse(localStorage.getItem('user') || 'null');
             const userId = user?.id;
-
-            console.log('=== TICKET FETCH DEBUG ===');
-            console.log('User from localStorage:', user);
-            console.log('User ID:', userId);
+            const token = localStorage.getItem('token');
 
             if (!userId) {
-                console.log('No user ID found, showing default tickets');
-                // If no user, just show default tickets
-                setTickets(defaultTickets);
+                setLoading(false);
                 return;
             }
 
-            // Fetch user-specific service requests from backend
-            const url = API_ENDPOINTS.serviceRequests.byUser(userId);
-            console.log('Fetching from URL:', url);
+            const response = await axios.get(API_ENDPOINTS.serviceRequests.byUser(userId), {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-            const response = await fetch(url);
-            const data = await response.json();
-
-            console.log('API Response:', data);
-            console.log('Tickets count:', data.tickets?.length || 0);
-
-            if (data.success && data.tickets && data.tickets.length > 0) {
-                console.log('Processing tickets:', data.tickets);
-
-                // Format the tickets for display
-                const userTickets = data.tickets.map(ticket => ({
-                    id: ticket.ticket_id,
-                    title: formatServiceType(ticket.service_type) + ' Request',
-                    status: ticket.status,
-                    created: new Date(ticket.created_at).toLocaleString(),
-                    location: ticket.full_address,
-                    description: `Service request for ${formatServiceType(ticket.service_type)}`,
-                    technician: ticket.assigned_to_username || 'Not assigned',
-                    priority: capitalizeFirst(ticket.priority || 'medium'),
-                    supervisorNotes: ticket.supervisor_notes,
-                    documents: ticket.documents,
-                    updates: generateUpdates(ticket)
-                }));
-
-                console.log('Formatted tickets:', userTickets);
-                setTickets(userTickets);
-            } else {
-                console.log('No tickets found for this user');
-                // No tickets found for this user
-                setTickets([]);
+            if (response.data.success) {
+                setTickets(response.data.tickets);
             }
         } catch (error) {
             console.error('Error fetching tickets:', error);
-            // Show empty state on error
-            setTickets([]);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const generateUpdates = (ticket) => {
-        const updates = [];
+    const fetchOutages = async () => {
+        try {
+            const user = JSON.parse(localStorage.getItem('user') || 'null');
+            const userId = user?.id;
+            const token = localStorage.getItem('token');
 
-        // Initial creation
-        updates.push({
-            time: new Date(ticket.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            message: 'Service request submitted'
-        });
+            if (!userId) {
+                return;
+            }
 
-        // Status-based updates
-        if (ticket.status === 'under_review') {
-            updates.push({
-                time: new Date(ticket.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                message: 'Request under review by supervisor'
+            const response = await axios.get(API_ENDPOINTS.outages.byUser(userId), {
+                headers: { Authorization: `Bearer ${token}` }
             });
-        }
 
-        if (ticket.status === 'approved') {
-            updates.push({
-                time: new Date(ticket.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                message: 'Request approved by supervisor'
-            });
+            if (response.data.success) {
+                setOutages(response.data.outages);
+            }
+        } catch (error) {
+            console.error('Error fetching outages:', error);
         }
+    };
 
-        if (ticket.status === 'rejected') {
-            updates.push({
-                time: new Date(ticket.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                message: `Request rejected${ticket.supervisor_notes ? ': ' + ticket.supervisor_notes : ''}`
-            });
+    const getStatusIndex = (status) => {
+        const index = stages.findIndex(s => s.key === status);
+        if (index === -1) {
+            if (status === 'under_review') return 0;
+            if (status === 'resolved') return 4;
+            return 0;
         }
-
-        if (ticket.status === 'assigned' && ticket.assigned_to_username) {
-            updates.push({
-                time: new Date(ticket.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                message: `Assigned to technician: ${ticket.assigned_to_username}`
-            });
-        }
-
-        if (ticket.status === 'in_progress') {
-            updates.push({
-                time: new Date(ticket.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                message: 'Work in progress'
-            });
-        }
-
-        if (ticket.status === 'completed') {
-            updates.push({
-                time: new Date(ticket.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                message: 'Service request completed'
-            });
-        }
-
-        return updates;
+        return index;
     };
 
     const formatServiceType = (serviceType) => {
@@ -182,221 +110,341 @@ const Ticket = () => {
         return serviceMap[serviceType] || serviceType;
     };
 
-    const capitalizeFirst = (str) => {
-        if (!str) return 'Medium';
-        return str.charAt(0).toUpperCase() + str.slice(1);
-    };
-
-    const getStatusIcon = (status) => {
-        switch (status) {
-            case 'approved':
-            case 'resolved': return <CheckCircle className="text-green-500" />;
-            case 'in_progress':
-            case 'in-progress': return <RefreshCw className="text-blue-500" />;
-            case 'rejected': return <XCircle className="text-red-500" />;
-            case 'pending':
-            case 'under_review': return <Clock className="text-yellow-500" />;
-            default: return <AlertCircle className="text-gray-500" />;
-        }
+    const formatOutageType = (outageType) => {
+        const outageMap = {
+            'power-outage': 'Power Outage',
+            'transformer-failure': 'Transformer Failure',
+            'line-damage': 'Line Damage',
+            'maintenance': 'Maintenance',
+            'other': 'Other'
+        };
+        return outageMap[outageType] || outageType;
     };
 
     const getStatusColor = (status) => {
         switch (status) {
-            case 'approved':
-            case 'resolved': return 'bg-green-100 text-green-800';
-            case 'in_progress':
-            case 'in-progress': return 'bg-blue-100 text-blue-800';
+            case 'completed':
+            case 'resolved': return 'bg-emerald-100 text-emerald-800';
+            case 'in_progress': return 'bg-blue-100 text-blue-800';
             case 'rejected': return 'bg-red-100 text-red-800';
             case 'pending':
-            case 'under_review': return 'bg-yellow-100 text-yellow-800';
-            default: return 'bg-gray-100 text-gray-800';
+            case 'under_review': return 'bg-amber-100 text-amber-800';
+            default: return 'bg-slate-100 text-slate-800';
         }
     };
 
-    const handleRefresh = () => {
-        fetchTickets();
-        console.log('Tickets refreshed from backend');
-    };
+    const TicketList = ({ items, selectedItem, setSelectedItem, type, formatType, getStatusColor, refreshFunction }) => (
+        <div className="grid lg:grid-cols-12 gap-8">
+            {/* Ticket List */}
+            <div className="lg:col-span-4 space-y-4">
+                <div className="flex items-center justify-between px-2 mb-4">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active queue</span>
+                    <button onClick={refreshFunction} className="text-blue-600 hover:rotate-180 transition-transform duration-500">
+                        <RefreshCw size={14} />
+                    </button>
+                </div>
+                <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                    {items.map((item) => (
+                        <div
+                            key={item.id}
+                            onClick={() => setSelectedItem(item)}
+                            className={`p-5 rounded-2xl border-2 transition-all cursor-pointer ${selectedItem?.id === item.id ? 'border-blue-500 bg-white shadow-xl ring-4 ring-blue-50' : 'border-transparent bg-white shadow-sm hover:border-slate-200'}`}
+                        >
+                            <div className="flex justify-between items-start mb-3">
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                                    {type === 'service' ? item.ticket_id : `OUT-${item.id}`}
+                                </div>
+                                <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getStatusColor(item.status)}`}>
+                                    {item.status}
+                                </div>
+                            </div>
+                            <h3 className="font-black text-slate-900 mb-4">
+                                {type === 'service' ? formatType(item.service_type) : formatType(item.outage_type)}
+                            </h3>
+                            <div className="flex items-center text-xs text-slate-500 gap-4">
+                                <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(item.created_at).toLocaleDateString()}</span>
+                                <span className="flex items-center gap-1 text-blue-600 font-bold">TRACKING <ArrowRight size={12} /></span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
 
-    if (tickets.length === 0) {
+            {/* Ticket Tracking View */}
+            <div className="lg:col-span-8">
+                {selectedItem ? (
+                    <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100">
+                        <div className="bg-slate-900 p-8 text-white">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                                <div>
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest ${getStatusColor(selectedItem.status)}`}>
+                                            {selectedItem.status.replace('_', ' ')}
+                                        </div>
+                                        <span className="text-slate-400 font-bold text-sm">
+                                            {type === 'service' ? selectedItem.ticket_id : `OUT-${selectedItem.id}`}
+                                        </span>
+                                    </div>
+                                    <h2 className="text-3xl font-black tracking-tight">
+                                        {type === 'service' ? formatType(selectedItem.service_type) : formatType(selectedItem.outage_type)}
+                                    </h2>
+                                </div>
+                                {type === 'service' && (
+                                    <div className="text-right">
+                                        <div className="text-[10px] font-black text-slate-500 uppercase mb-1">Priority Level</div>
+                                        <div className={`text-xl font-black ${selectedItem.priority === 'high' ? 'text-red-500' : 'text-amber-500'}`}>
+                                            {selectedItem.priority?.toUpperCase()}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Visual Timeline */}
+                            <div className="relative mt-12 mb-4">
+                                <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-800 -translate-y-1/2 rounded-full"></div>
+                                <div 
+                                    className="absolute top-1/2 left-0 h-1 bg-blue-500 -translate-y-1/2 rounded-full transition-all duration-1000"
+                                    style={{ width: `${(getStatusIndex(selectedItem.status) / (stages.length - 1)) * 100}%` }}
+                                ></div>
+                                
+                                <div className="relative flex justify-between">
+                                    {stages.map((stage, idx) => {
+                                        const isActive = idx <= getStatusIndex(selectedItem.status);
+                                        const isCurrent = idx === getStatusIndex(selectedItem.status);
+                                        const Icon = stage.icon;
+                                        
+                                        return (
+                                            <div key={stage.key} className="flex flex-col items-center">
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 z-10 ${isActive ? 'bg-blue-600 text-white scale-110 shadow-lg shadow-blue-900' : 'bg-slate-800 text-slate-500'}`}>
+                                                    <Icon size={18} />
+                                                </div>
+                                                <span className={`mt-3 text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-blue-400' : 'text-slate-600'}`}>
+                                                    {stage.label}
+                                                </span>
+                                                {isCurrent && (
+                                                    <div className="mt-1 animate-bounce">
+                                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-8">
+                            <div className="grid md:grid-cols-2 gap-10">
+                                <div className="space-y-6">
+                                    <div>
+                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                                            {type === 'service' ? 'Service Location' : 'Outage Location'}
+                                        </h4>
+                                        <div className="flex items-start gap-3 bg-slate-50 p-4 rounded-2xl">
+                                            <MapPin className="text-blue-600 mt-1" size={20} />
+                                            <p className="text-slate-700 font-medium leading-relaxed">
+                                                {type === 'service' ? selectedItem.full_address : selectedItem.address}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Submission Details</h4>
+                                        <div className="space-y-3 bg-slate-50 p-4 rounded-2xl text-sm">
+                                            {type === 'service' ? (
+                                                <>
+                                                    <div className="flex justify-between">
+                                                        <span className="text-slate-500">Contact Person</span>
+                                                        <span className="font-bold text-slate-900">{selectedItem.full_name}</span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span className="text-slate-500">Phone</span>
+                                                        <span className="font-bold text-slate-900">{selectedItem.phone}</span>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="flex justify-between">
+                                                        <span className="text-slate-500">Outage Type</span>
+                                                        <span className="font-bold text-slate-900">{formatType(selectedItem.outage_type)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span className="text-slate-500">Urgency</span>
+                                                        <span className="font-bold text-slate-900">{selectedItem.urgency}</span>
+                                                    </div>
+                                                </>
+                                            )}
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-500">Submitted On</span>
+                                                <span className="font-bold text-slate-900">{new Date(selectedItem.created_at).toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <div>
+                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Field Progress</h4>
+                                        <div className="bg-slate-900 rounded-2xl p-6 text-white">
+                                            {selectedItem.status === 'in_progress' ? (
+                                                <>
+                                                    <div className="flex items-center justify-between mb-4">
+                                                        <span className="text-xs font-bold text-blue-400 uppercase">Estimated Time</span>
+                                                        <span className="text-2xl font-black tracking-tighter">{selectedItem.estimated_time || '3 Hours'}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
+                                                            <Wrench className="text-blue-500" size={20} />
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-[10px] font-bold text-slate-500 uppercase">Assigned Tech</div>
+                                                            <div className="text-sm font-bold">{selectedItem.assigned_to_name || 'Dispatching...'}</div>
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            ) : selectedItem.status === 'resolved' ? (
+                                                <div className="text-center">
+                                                    <CheckCircle className="text-emerald-500 mx-auto mb-2" size={40} />
+                                                    <div className="text-lg font-black uppercase italic tracking-tighter">Issue Resolved</div>
+                                                    <p className="text-slate-400 text-[10px] uppercase font-bold mt-1">Thank you for your patience</p>
+                                                </div>
+                                            ) : (
+                                                <div className="py-4 text-center">
+                                                    <Clock className="text-slate-700 mx-auto mb-2" size={40} />
+                                                    <p className="text-slate-500 text-xs font-bold uppercase italic">
+                                                        {type === 'service' ? 'Awaiting Supervisor Approval' : 'Awaiting Technician Assignment'}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {selectedItem.technician_notes && (
+                                        <div className="bg-amber-50 border-2 border-amber-100 rounded-2xl p-4">
+                                            <h4 className="text-[10px] font-black text-amber-600 uppercase mb-2">Technician Notes</h4>
+                                            <p className="text-amber-900 text-sm italic font-medium">"{selectedItem.technician_notes}"</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            <div className="mt-10 pt-8 border-t border-slate-100 flex justify-end">
+                                <button className="px-6 py-3 border-2 border-slate-200 text-slate-500 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2">
+                                    <AlertCircle size={16} /> REPORT ISSUE WITH TICKET
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="bg-slate-50 rounded-3xl p-20 text-center border-4 border-dashed border-slate-200 flex flex-col items-center justify-center h-full">
+                        <div className="bg-white w-24 h-24 rounded-full flex items-center justify-center shadow-xl mb-6 ring-8 ring-slate-100">
+                            <RefreshCw className="text-slate-300" size={48} />
+                        </div>
+                        <h3 className="text-2xl font-black text-slate-800 mb-2 italic uppercase tracking-tighter">Tracking Console</h3>
+                        <p className="text-slate-500 max-w-xs mx-auto font-medium">
+                            Select a {type === 'service' ? 'service request' : 'outage report'} from your queue to view real-time field progress, technician assignments, and estimated restoration times.
+                        </p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
+    if (loading && tickets.length === 0 && outages.length === 0) {
         return (
-            <div className="max-w-4xl mx-auto bg-white rounded-xl shadow p-8 text-center">
-                <FileText className="mx-auto text-gray-400 mb-4" size={64} />
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">No Tickets Found</h2>
-                <p className="text-gray-600 mb-6">You haven't created any service requests or outage reports yet.</p>
-                <button
-                    onClick={() => window.location.href = '/dashboard'}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                    Report an Issue
-                </button>
+            <div className="flex flex-col items-center justify-center py-20">
+                <RefreshCw className="animate-spin text-blue-500 mb-4" size={48} />
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Syncing your requests...</p>
             </div>
         );
     }
 
     return (
-        <div className="max-w-6xl mx-auto">
-            {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-800 mb-2">My Tickets</h1>
-                <p className="text-gray-600">Track your service requests and outage reports</p>
+        <div className="max-w-7xl mx-auto p-4 md:p-8">
+            <header className="mb-10">
+                <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">MY REQUESTS & REPORTS</h1>
+                <p className="text-slate-500 font-medium">Track the real-time status of your power applications and outage reports</p>
+            </header>
+
+            {/* Tab Navigation */}
+            <div className="flex gap-1 mb-8 bg-slate-100 p-1 rounded-2xl w-fit">
+                <button
+                    onClick={() => setActiveTab('service')}
+                    className={`px-6 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all ${
+                        activeTab === 'service' 
+                            ? 'bg-white text-slate-900 shadow-lg' 
+                            : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                >
+                    Service Requests ({tickets.length})
+                </button>
+                <button
+                    onClick={() => setActiveTab('outage')}
+                    className={`px-6 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all ${
+                        activeTab === 'outage' 
+                            ? 'bg-white text-slate-900 shadow-lg' 
+                            : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                >
+                    Outage Reports ({outages.length})
+                </button>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-6">
-                {/* Ticket List - Left Column */}
-                <div className="md:col-span-1">
-                    <div className="bg-white rounded-xl shadow p-4">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="font-bold text-lg">All Tickets ({tickets.length})</h2>
-                            <button onClick={handleRefresh} className="text-blue-600 text-sm">
-                                <RefreshCw size={16} className="inline mr-1" /> Refresh
+            {activeTab === 'service' && (
+                <>
+                    {tickets.length === 0 ? (
+                        <div className="bg-white rounded-3xl shadow-xl p-12 text-center border border-slate-100">
+                            <FileText className="mx-auto text-slate-200 mb-6" size={80} />
+                            <h2 className="text-2xl font-black text-slate-800 mb-2">No Active Service Requests</h2>
+                            <p className="text-slate-500 mb-8">You haven't submitted any service requests yet.</p>
+                            <button 
+                                onClick={() => window.location.href = '/customer/request'}
+                                className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-100"
+                            >
+                                NEW APPLICATION
                             </button>
                         </div>
+                    ) : (
+                        <TicketList 
+                            items={tickets} 
+                            selectedItem={selectedTicket} 
+                            setSelectedItem={setSelectedTicket}
+                            type="service"
+                            formatType={formatServiceType}
+                            getStatusColor={getStatusColor}
+                            refreshFunction={fetchTickets}
+                        />
+                    )}
+                </>
+            )}
 
-                        <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                            {tickets.map((ticket) => (
-                                <div
-                                    key={ticket.id}
-                                    onClick={() => setSelectedTicket(ticket)}
-                                    className={`p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition ${selectedTicket?.id === ticket.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                                        }`}
-                                >
-                                    <div className="flex justify-between items-start mb-2">
-                                        <div className="font-bold text-gray-800">{ticket.id}</div>
-                                        <div className={`px-2 py-1 rounded-full text-xs ${getStatusColor(ticket.status)}`}>
-                                            {ticket.status.toUpperCase()}
-                                        </div>
-                                    </div>
-                                    <h3 className="font-semibold text-gray-800 mb-1">{ticket.title}</h3>
-                                    <div className="flex items-center text-sm text-gray-600 mb-2">
-                                        <Calendar size={14} className="mr-1" />
-                                        {ticket.created}
-                                    </div>
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <MapPin size={14} className="mr-1" />
-                                        {ticket.location}
-                                    </div>
-                                    <div className="flex items-center mt-3 text-blue-600 text-sm">
-                                        View Details <ChevronRight size={16} className="ml-1" />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Ticket Details - Right Column */}
-                <div className="md:col-span-2">
-                    {selectedTicket ? (
-                        <div className="bg-white rounded-xl shadow p-6">
-                            <div className="flex justify-between items-start mb-6">
-                                <div>
-                                    <div className="flex items-center mb-2">
-                                        {getStatusIcon(selectedTicket.status)}
-                                        <span className={`ml-2 px-3 py-1 rounded-full ${getStatusColor(selectedTicket.status)}`}>
-                                            {selectedTicket.status.toUpperCase()}
-                                        </span>
-                                    </div>
-                                    <h2 className="text-2xl font-bold text-gray-800">{selectedTicket.title}</h2>
-                                    <p className="text-gray-600 mt-1">Ticket ID: {selectedTicket.id}</p>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-sm text-gray-500">Priority</div>
-                                    <div className="text-lg font-bold text-red-600">{selectedTicket.priority}</div>
-                                </div>
-                            </div>
-
-                            <div className="grid md:grid-cols-2 gap-6 mb-6">
-                                <div className="space-y-4">
-                                    <div>
-                                        <div className="flex items-center text-gray-700 mb-1">
-                                            <MapPin size={16} className="mr-2" />
-                                            <span className="font-medium">Location</span>
-                                        </div>
-                                        <p className="text-gray-900">{selectedTicket.location}</p>
-                                    </div>
-
-                                    <div>
-                                        <div className="flex items-center text-gray-700 mb-1">
-                                            <Calendar size={16} className="mr-2" />
-                                            <span className="font-medium">Created</span>
-                                        </div>
-                                        <p className="text-gray-900">{selectedTicket.created}</p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <div>
-                                        <div className="flex items-center text-gray-700 mb-1">
-                                            <User size={16} className="mr-2" />
-                                            <span className="font-medium">Assigned Technician</span>
-                                        </div>
-                                        <p className="text-gray-900">{selectedTicket.technician}</p>
-                                    </div>
-
-                                    {selectedTicket.resolved && (
-                                        <div>
-                                            <div className="flex items-center text-gray-700 mb-1">
-                                                <CheckCircle size={16} className="mr-2 text-green-500" />
-                                                <span className="font-medium">Resolved</span>
-                                            </div>
-                                            <p className="text-gray-900">{selectedTicket.resolved}</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Description */}
-                            <div className="mb-6">
-                                <h3 className="font-bold text-gray-800 mb-2">Description</h3>
-                                <p className="text-gray-700 bg-gray-50 p-4 rounded-lg">{selectedTicket.description}</p>
-                            </div>
-
-                            {/* Supervisor Notes */}
-                            {selectedTicket.supervisorNotes && (
-                                <div className="mb-6">
-                                    <h3 className="font-bold text-gray-800 mb-2">Supervisor Notes</h3>
-                                    <div className={`p-4 rounded-lg border ${selectedTicket.status === 'rejected'
-                                        ? 'bg-red-50 border-red-200 text-red-800'
-                                        : 'bg-blue-50 border-blue-200 text-blue-800'
-                                        }`}>
-                                        <p>{selectedTicket.supervisorNotes}</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Updates Timeline */}
-                            <div>
-                                <h3 className="font-bold text-gray-800 mb-4">Status Updates</h3>
-                                <div className="space-y-4">
-                                    {selectedTicket.updates.map((update, idx) => (
-                                        <div key={idx} className="flex">
-                                            <div className="flex flex-col items-center mr-4">
-                                                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                                                {idx < selectedTicket.updates.length - 1 && (
-                                                    <div className="w-0.5 h-full bg-blue-200"></div>
-                                                )}
-                                            </div>
-                                            <div className="pb-4">
-                                                <div className="font-medium text-gray-800">{update.message}</div>
-                                                <div className="text-sm text-gray-500 mt-1">{update.time}</div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+            {activeTab === 'outage' && (
+                <>
+                    {outages.length === 0 ? (
+                        <div className="bg-white rounded-3xl shadow-xl p-12 text-center border border-slate-100">
+                            <AlertCircle className="mx-auto text-slate-200 mb-6" size={80} />
+                            <h2 className="text-2xl font-black text-slate-800 mb-2">No Outage Reports</h2>
+                            <p className="text-slate-500 mb-8">You haven't reported any outages yet.</p>
+                            <button 
+                                onClick={() => window.location.href = '/customer/report-outage'}
+                                className="px-8 py-4 bg-orange-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-orange-700 transition-all shadow-lg shadow-orange-100"
+                            >
+                                REPORT OUTAGE
+                            </button>
                         </div>
                     ) : (
-                        <div className="bg-white rounded-xl shadow p-8 text-center h-full flex items-center justify-center">
-                            <div>
-                                <FileText className="mx-auto text-gray-300 mb-4" size={48} />
-                                <h3 className="text-xl font-bold text-gray-600 mb-2">Select a Ticket</h3>
-                                <p className="text-gray-500">Choose a ticket from the list to view its details and status.</p>
-                            </div>
-                        </div>
+                        <TicketList 
+                            items={outages} 
+                            selectedItem={selectedTicket} 
+                            setSelectedItem={setSelectedTicket}
+                            type="outage"
+                            formatType={formatOutageType}
+                            getStatusColor={getStatusColor}
+                            refreshFunction={fetchOutages}
+                        />
                     )}
-                </div>
-            </div>
+                </>
+            )}
         </div>
     );
 };
