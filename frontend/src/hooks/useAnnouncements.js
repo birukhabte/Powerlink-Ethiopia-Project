@@ -8,13 +8,10 @@ const useAnnouncements = () => {
 
   const fetchAnnouncements = async () => {
     try {
-      console.log('🔄 Fetching announcements from API...');
       setLoading(true);
       const response = await fetch(API_ENDPOINTS.announcements.base);
-      console.log('📡 API Response status:', response.status);
       
       const data = await response.json();
-      console.log('📦 API Response data:', data);
       
       if (data.success) {
         // Format the announcements to match the existing structure
@@ -32,15 +29,12 @@ const useAnnouncements = () => {
           expires_at: announcement.expires_at
         }));
         
-        console.log('✅ Formatted announcements:', formattedAnnouncements);
         setAnnouncements(formattedAnnouncements);
         setError(null);
       } else {
-        console.error('❌ API returned error:', data.error);
         setError(data.error || 'Failed to fetch announcements');
       }
-    } catch (err) {
-      console.error('💥 Error fetching announcements:', err);
+    } catch {
       setError('Failed to connect to server');
     } finally {
       setLoading(false);

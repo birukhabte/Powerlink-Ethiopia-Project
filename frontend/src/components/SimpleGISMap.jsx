@@ -120,7 +120,31 @@ const SimpleGISMap = ({ onLocationSelect, selectedLocation, existingOutages = []
         },
         (error) => {
           console.error('Error getting location:', error);
-          alert('Unable to get your current location. Please click on the map to select a location.');
+
+          // Provide specific error messages based on error code
+          let errorMessage = 'Unable to get your current location. ';
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage += 'Location access was denied. Please enable location permissions in your browser settings.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage += 'Location information is unavailable. Please check that location services are enabled on your device.';
+              break;
+            case error.TIMEOUT:
+              errorMessage += 'Location request timed out. Please try again.';
+              break;
+            default:
+              errorMessage += 'An unknown error occurred.';
+              break;
+          }
+          errorMessage += ' Please click on the map to select a location manually.';
+
+          alert(errorMessage);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000, // 15 seconds timeout
+          maximumAge: 60000 // Accept cached position up to 1 minute old
         }
       );
     }

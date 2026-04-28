@@ -19,17 +19,100 @@ const History = () => {
         try {
             setLoading(true);
             const token = localStorage.getItem('token');
-            const response = await axios.get(`${API_URL}/api/schedule`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (response.data.success) {
-                // For history, we show completed tasks
-                const completed = response.data.schedule.filter(item => 
-                    item.extendedProps.status.toLowerCase() === 'completed' || 
-                    item.extendedProps.status.toLowerCase() === 'closed'
-                );
-                setHistory(completed);
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const role = user.role;
+            const userId = user.id;
+
+            let data = [];
+
+            if (role === 'customer') {
+                // Fetch customer's service requests and outages
+                const [serviceRes, outageRes] = await Promise.all([
+                    axios.get(`${API_URL}/api/service-requests/user/${userId}`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    }),
+                    axios.get(`${API_URL}/api/outages/user/${userId}`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    })
+                ]);
+
+                const services = serviceRes.data.tickets.map(item => ({
+                    id: item.id,
+                    title: `Service Request - ${item.service_type}`,
+                    start: item.created_at,
+                    extendedProps: {
+                        status: item.status,
+                        description: item.description || item.service_type,
+                        address: item.full_address,
+                        type: 'service'
+                    }
+                }));
+
+                const outages = outageRes.data.outages.map(item => ({
+                    id: item.id,
+                    title: `Outage Report - ${item.title}`,
+                    start: item.created_at,
+                    extendedProps: {
+                        status: item.status,
+                        description: item.description,
+                        address: item.address,
+                        type: 'outage'
+                    }
+                }));
+
+                data = [...services, ...outages].sort((a, b) => new Date(b.start) - new Date(a.start));
+
+            } else if (role === 'technician') {
+                // Fetch technician's completed tasks
+                const response = await axios.get(`${API_URL}/api/schedule`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (response.data.success) {
+                    const completed = response.data.schedule.filter(item => 
+                        item.extendedProps.status.toLowerCase() === 'completed' || 
+                        item.extendedProps.status.toLowerCase() === 'closed'
+                    );
+                    data = completed;
+                }
+            } else {
+                // For admin/supervisor, fetch all recent service requests and outages
+                const [serviceRes, outageRes] = await Promise.all([
+                    axios.get(`${API_URL}/api/service-requests`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    }),
+                    axios.get(`${API_URL}/api/outages/manage`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    })
+                ]);
+
+                const services = serviceRes.data.requests.slice(0, 50).map(item => ({
+                    id: item.id,
+                    title: `Service Request - ${item.service_type}`,
+                    start: item.created_at,
+                    extendedProps: {
+                        status: item.status,
+                        description: item.description || item.service_type,
+                        address: item.full_address,
+                        type: 'service'
+                    }
+                }));
+
+                const outages = outageRes.data.outages.slice(0, 50).map(item => ({
+                    id: item.id,
+                    title: `Outage Report - ${item.title}`,
+                    start: item.created_at,
+                    extendedProps: {
+                        status: item.status,
+                        description: item.description,
+                        address: item.address,
+                        type: 'outage'
+                    }
+                }));
+
+                data = [...services, ...outages].sort((a, b) => new Date(b.start) - new Date(a.start));
             }
+
+            setHistory(data);
         } catch (error) {
             console.error('Error fetching history:', error);
         } finally {
@@ -56,8 +139,8 @@ const History = () => {
                                 <HistoryIcon className="text-green-600" size={32} />
                             </div>
                             <div>
-                                <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none">Task History</h1>
-                                <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] mt-2">Archive of your completed assignments</p>
+                                <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none">Recent Activities</h1>
+                                <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] mt-2">Your recent service requests and maintenance activities</p>
                             </div>
                         </div>
                     </div>
@@ -122,8 +205,8 @@ const History = () => {
                         <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
                             <HistoryIcon className="text-gray-200" size={48} />
                         </div>
-                        <h3 className="text-2xl font-black text-gray-800 mb-2 italic font-medium text-gray-500 tracking-tight">No Archive Found</h3>
-                        <p className="text-gray-500 max-w-sm mx-auto font-medium">Your resolved tasks and maintenance logs will appear here once they are marked as completed.</p>
+                        <h3 className="text-2xl font-black text-gray-800 mb-2 italic font-medium text-gray-500 tracking-tight">No Recent Activities</h3>
+                        <p className="text-gray-500 max-w-sm mx-auto font-medium">Your recent service requests and activities will appear here.</p>
                         <button className="mt-8 px-10 py-3 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all hover:bg-black active:scale-95 shadow-xl shadow-gray-200 flex items-center gap-3 mx-auto">
                             Go to active tasks <ExternalLink size={14} />
                         </button>
@@ -155,15 +238,15 @@ const History = () => {
                                         
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-6 border-t border-gray-50">
                                             <div className="space-y-1">
-                                                <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Completed On</span>
+                                                <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Date</span>
                                                 <p className="text-sm font-bold text-gray-700 flex items-center gap-2">
                                                     <Calendar size={14} className="text-blue-600" /> {new Date(item.start).toLocaleDateString()}
                                                 </p>
                                             </div>
                                             <div className="space-y-1">
-                                                <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Resolution Time</span>
-                                                <p className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                                                    <Clock size={14} className="text-blue-600" /> 1.5 Hours
+                                                <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Status</span>
+                                                <p className={`text-sm font-bold flex items-center gap-2 uppercase tracking-tighter ${item.extendedProps.status === 'completed' || item.extendedProps.status === 'resolved' ? 'text-green-600' : item.extendedProps.status === 'pending' ? 'text-yellow-600' : 'text-blue-600'}`}>
+                                                    <Tag size={14} /> {item.extendedProps.status.replace('_', ' ')}
                                                 </p>
                                             </div>
                                             <div className="space-y-1">
@@ -173,9 +256,9 @@ const History = () => {
                                                 </p>
                                             </div>
                                             <div className="space-y-1">
-                                                <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Result</span>
-                                                <p className="text-sm font-bold text-green-600 flex items-center gap-2 uppercase tracking-tighter">
-                                                    <Tag size={14} /> Resolved
+                                                <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Type</span>
+                                                <p className="text-sm font-bold text-gray-700 flex items-center gap-2 uppercase tracking-tighter">
+                                                    <Tag size={14} className={item.extendedProps.type === 'outage' ? 'text-red-600' : 'text-blue-600'} /> {item.extendedProps.type}
                                                 </p>
                                             </div>
                                         </div>

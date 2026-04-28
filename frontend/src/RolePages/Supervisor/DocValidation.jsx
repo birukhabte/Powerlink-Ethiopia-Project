@@ -13,8 +13,12 @@ import {
     Search,
     ChevronRight,
     FileCheck,
-    Printer
+    Printer,
+    RefreshCw,
+    ShieldCheck,
+    ArrowRight
 } from 'lucide-react';
+import axios from 'axios';
 import API_BASE_URL, { API_ENDPOINTS } from '../../config/api';
 
 const DocValidation = () => {
@@ -30,6 +34,7 @@ const DocValidation = () => {
     const [selectedRejectionReason, setSelectedRejectionReason] = useState('');
     const [customRejectionReason, setCustomRejectionReason] = useState('');
     const [docToReject, setDocToReject] = useState(null);
+    const [actionLoading, setActionLoading] = useState(false);
 
     useEffect(() => {
         fetchDocuments();
@@ -38,17 +43,15 @@ const DocValidation = () => {
     const fetchDocuments = async () => {
         try {
             setLoading(true);
-            const response = await fetch(API_ENDPOINTS.serviceRequests.base);
-            const data = await response.json();
+            const token = localStorage.getItem('token');
+            const response = await axios.get(API_ENDPOINTS.serviceRequests.base, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-            if (data.success) {
-                // Transform service requests into document entries
-                const allDocs = [];
-                data.requests.forEach(request => {
+            if (response.data.success) {
+                const allDocs = response.data.requests.map(request => {
                     const requestDocs = request.documents || [];
-                    
-                    // Group all documents for this request
-                    const docGroup = {
+                    return {
                         id: `DOC-${request.ticket_id}`,
                         requestId: request.id,
                         ticketId: request.ticket_id,
@@ -70,18 +73,13 @@ const DocValidation = () => {
                             downloadUrl: docMetadata.storedName ? API_ENDPOINTS.uploads.download(request.ticket_id, docMetadata.storedName) : null,
                         }))
                     };
-                    
-                    allDocs.push(docGroup);
                 });
 
                 setDocuments(allDocs);
 
-                // If coming from "Check Document" button, select the doc group of that request
                 if (targetRequestId) {
                     const docGroup = allDocs.find(d => d.requestId === targetRequestId);
-                    if (docGroup) {
-                        setSelectedDoc(docGroup);
-                    }
+                    if (docGroup) setSelectedDoc(docGroup);
                 }
             }
         } catch (error) {
@@ -97,8 +95,7 @@ const DocValidation = () => {
             'relocation': 'Service Relocation',
             'name-change': 'Name Change',
             'tariff-change': 'Tariff Change',
-            'meter-separation': 'Meter Separation',
-            'outage': 'Reported Outage'
+            'meter-separation': 'Meter Separation'
         };
         return serviceMap[serviceType] || serviceType;
     };
@@ -106,10 +103,8 @@ const DocValidation = () => {
     const formatBytes = (bytes, decimals = 2) => {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
-        const dm = decimals < 0 ? 0 : decimals;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + ['Bytes', 'KB', 'MB', 'GB'][i];
     };
 
     const calculateTimeAgo = (createdAt) => {
@@ -117,101 +112,33 @@ const DocValidation = () => {
         const created = new Date(createdAt);
         const diffMs = now - created;
         const diffMins = Math.floor(diffMs / 60000);
+        if (diffMins < 60) return `${diffMins}m ago`;
         const diffHours = Math.floor(diffMins / 60);
-        const diffDays = Math.floor(diffHours / 24);
-
-        if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-        if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-        return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        return `${Math.floor(diffHours / 24)}d ago`;
     };
 
-    const handleApprove = async (docId) => {
+    const handleApprove = async (docGroup) => {
         try {
-            // Find the document and its associated request
-            const doc = documents.find(d => d.id === docId);
-            if (!doc) return;
-
-            // Update the service request status via API
-            const response = await fetch(API_ENDPOINTS.serviceRequests.approve(doc.requestId), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    supervisor_notes: 'Document approved by supervisor'
-                })
+            setActionLoading(true);
+            const token = localStorage.getItem('token');
+            const response = await axios.post(API_ENDPOINTS.serviceRequests.approve(docGroup.requestId), {
+                supervisor_notes: 'Documents verified and approved. Moving to assignment phase.'
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
             });
 
-            const data = await response.json();
-
-            if (data.success) {
-                // Update local state
-                setDocuments(docs => docs.map(d =>
-                    d.id === docId ? {
-                        ...d,
-                        status: 'approved',
-                        approvedBy: 'You',
-                        approvedAt: new Date().toLocaleTimeString()
-                    } : d
-                ));
-                console.log(`Document ${docId} approved and status sent to customer`);
-                alert('Document approved successfully! Customer has been notified.');
-                // Refresh documents
+            if (response.data.success) {
+                alert('Request approved! Technician assignment is now enabled.');
                 fetchDocuments();
-            } else {
-                throw new Error(data.error || 'Failed to approve document');
+                setSelectedDoc(null);
             }
         } catch (error) {
-            console.error('Error approving document:', error);
-            alert('Failed to approve document. Please try again.');
+            console.error('Error approving documents:', error);
+            alert('Failed to approve documents');
+        } finally {
+            setActionLoading(false);
         }
-    };
-
-    // Predefined rejection reasons
-    const rejectionReasons = [
-        {
-            category: 'Incomplete Documentation',
-            reasons: [
-                'Missing required forms or attachments',
-                'Application form not fully filled',
-                'Required signatures not provided'
-            ]
-        },
-        {
-            category: 'Invalid or Expired Identification',
-            reasons: [
-                'National ID, Kebele ID, or passport is expired',
-                'ID does not belong to the applicant',
-                'Name on ID does not match the application'
-            ]
-        },
-        {
-            category: 'Property Documentation Issues',
-            reasons: [
-                'Proof of property ownership is missing or invalid',
-                'Lease agreement is expired or incomplete',
-                'Property documents do not match the application address'
-            ]
-        },
-        {
-            category: 'Document Quality Issues',
-            reasons: [
-                'Document is blurred or unreadable',
-                'Document appears to be altered or tampered',
-                'Poor scan/photo quality - please resubmit'
-            ]
-        },
-        {
-            category: 'Other',
-            reasons: [
-                'Custom reason (specify below)'
-            ]
-        }
-    ];
-
-    const handleReject = (docId) => {
-        setDocToReject(docId);
-        setShowRejectModal(true);
     };
 
     const confirmReject = async () => {
@@ -219,447 +146,163 @@ const DocValidation = () => {
             ? customRejectionReason
             : selectedRejectionReason;
 
-        if (!finalReason || finalReason.trim() === '') {
-            alert('Please select or enter a rejection reason');
-            return;
-        }
+        if (!finalReason) return alert('Please specify a reason');
 
         try {
-            // Find the document and its associated request
-            const doc = documents.find(d => d.id === docToReject);
-            if (!doc) return;
-
-            // Update the service request status via API with rejection reason
-            const response = await fetch(API_ENDPOINTS.serviceRequests.reject(doc.requestId), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    supervisor_notes: `Document rejected. Reason: ${finalReason}`
-                })
+            setActionLoading(true);
+            const token = localStorage.getItem('token');
+            const response = await axios.post(API_ENDPOINTS.serviceRequests.reject(docToReject.requestId), {
+                supervisor_notes: `Documents rejected: ${finalReason}`
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
             });
 
-            const data = await response.json();
-
-            if (data.success) {
-                // Update local state
-                setDocuments(docs => docs.map(d =>
-                    d.id === docToReject ? {
-                        ...d,
-                        status: 'rejected',
-                        reason: finalReason,
-                        rejectedBy: 'You',
-                        rejectedAt: new Date().toLocaleTimeString()
-                    } : d
-                ));
-
-                console.log(`Document ${docToReject} rejected: ${finalReason}`);
-                alert(`Document rejected successfully!\n\nReason: ${finalReason}\n\nThe customer has been notified.`);
-
-                // Reset modal state
+            if (response.data.success) {
+                alert('Request rejected. Customer notified.');
                 setShowRejectModal(false);
-                setSelectedRejectionReason('');
-                setCustomRejectionReason('');
-                setDocToReject(null);
-                
-                // Refresh documents
                 fetchDocuments();
-            } else {
-                throw new Error(data.error || 'Failed to reject document');
+                setSelectedDoc(null);
             }
         } catch (error) {
-            console.error('Error rejecting document:', error);
-            alert('Failed to reject document. Please try again.');
+            console.error('Error rejecting documents:', error);
+            alert('Failed to reject documents');
+        } finally {
+            setActionLoading(false);
         }
     };
 
-    const cancelReject = () => {
-        setShowRejectModal(false);
-        setSelectedRejectionReason('');
-        setCustomRejectionReason('');
-        setDocToReject(null);
-    };
-
-    // Handle document download
-    const handleDownload = (doc) => {
-        if (doc.downloadUrl) {
-            // Create a temporary link to trigger download
-            const link = document.createElement('a');
-            link.href = doc.downloadUrl;
-            link.download = doc.fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } else if (doc.previewUrl && doc.previewUrl !== '#') {
-            // Fallback to preview URL
-            window.open(doc.previewUrl, '_blank');
-        } else {
-            alert('Document file is not available for download.');
-        }
-    };
-
-    // Handle document preview in new window
-    const handlePreview = (doc) => {
-        if (doc.previewUrl && doc.previewUrl !== '#') {
-            window.open(doc.previewUrl, '_blank');
-        } else {
-            alert('Document preview is not available.');
-        }
-    };
-
-    // Handle document print
-    const handlePrint = (doc) => {
-        if (doc.previewUrl && doc.previewUrl !== '#') {
-            // Open document in new window and print
-            const printWindow = window.open(doc.previewUrl, '_blank');
-            if (printWindow) {
-                printWindow.onload = () => {
-                    printWindow.focus();
-                    printWindow.print();
-                };
-            }
-        } else {
-            alert('Document is not available for printing.');
-        }
-    };
-
-    const filteredDocs = filter === 'all'
-        ? documents
-        : documents.filter(doc => doc.status === filter);
-
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'approved': return 'bg-green-100 text-green-800';
-            case 'rejected': return 'bg-red-100 text-red-800';
-            case 'pending': return 'bg-yellow-100 text-yellow-800';
-            default: return 'bg-gray-100 text-gray-800';
-        }
-    };
+    const filteredDocs = filter === 'all' ? documents : documents.filter(doc => doc.status === filter);
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
+        <div className="min-h-screen bg-slate-50 p-4 md:p-8">
             <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2 flex items-center">
-                        <FileCheck className="mr-3" /> Document Validation
+                <header className="mb-10">
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2 flex items-center">
+                        <ShieldCheck className="mr-3 text-blue-600" size={32} /> COMPLIANCE CENTER
                     </h1>
-                    <p className="text-gray-600">Review and validate documents uploaded by users</p>
-                </div>
+                    <p className="text-slate-500 font-medium">Verify legal and technical documentation for service applications</p>
+                </header>
 
-                <div className="grid lg:grid-cols-3 gap-6">
-                    {/* Left: Documents List */}
-                    <div className="lg:col-span-2">
-                        <div className="bg-white rounded-xl shadow p-4 mb-6">
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                                <div className="relative flex-1 max-w-md">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                                    <input type="text" placeholder="Search documents..." className="w-full pl-10 pr-4 py-2 border rounded-lg" />
-                                </div>
-                                <div className="flex items-center space-x-4">
-                                    <select
-                                        value={filter}
-                                        onChange={(e) => setFilter(e.target.value)}
-                                        className="border rounded-lg px-3 py-2"
-                                    >
-                                        <option value="all">All Documents</option>
-                                        <option value="pending">Pending Review</option>
-                                        <option value="approved">Approved</option>
-                                        <option value="rejected">Rejected</option>
-                                    </select>
-                                    <span className="text-sm text-gray-600">
-                                        {filteredDocs.length} documents
-                                    </span>
-                                </div>
-                            </div>
-
-                            {loading ? (
-                                <div className="text-center py-12">
-                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                                    <p className="text-gray-500 font-medium">Loading documents...</p>
-                                </div>
-                            ) : filteredDocs.length === 0 ? (
-                                <div className="text-center py-12">
-                                    <FileText size={48} className="mx-auto text-gray-300 mb-4" />
-                                    <p className="text-gray-500 font-medium">No documents found matching the criteria</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                                    {filteredDocs.map(doc => (
-                                        <div key={doc.id}
-                                            className={`p-4 border rounded-lg cursor-pointer hover:bg-gray-50 ${selectedDoc?.id === doc.id ? 'border-blue-500 bg-blue-50' : ''}`}
-                                            onClick={() => setSelectedDoc(doc)}
-                                        >
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div>
-                                                    <div className="font-bold text-gray-800">{doc.ticketId}</div>
-                                                    <div className="text-sm text-gray-600">{doc.documentCount} document{doc.documentCount > 1 ? 's' : ''}</div>
-                                                </div>
-                                                <span className={`px-3 py-1 rounded-full text-xs ${getStatusColor(doc.status)}`}>
-                                                    {doc.status.toUpperCase()}
-                                                </span>
-                                            </div>
-
-                                            <div className="flex items-center text-sm text-gray-600 mb-2">
-                                                <User size={14} className="mr-2" /> {doc.customer}
-                                            </div>
-                                            <div className="flex items-center text-sm text-gray-600 mb-2">
-                                                <FileText size={14} className="mr-2" /> {doc.requestType}
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <div className="flex items-center text-sm text-gray-500">
-                                                    <Clock size={14} className="mr-1" /> {doc.uploaded}
-                                                </div>
-                                                <ChevronRight size={16} className="text-blue-500" />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                <div className="grid lg:grid-cols-12 gap-8">
+                    {/* List Column */}
+                    <div className="lg:col-span-4 space-y-4">
+                        <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex gap-2">
+                            {['all', 'pending', 'approved'].map(f => (
+                                <button key={f} onClick={() => setFilter(f)} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'}`}>
+                                    {f}
+                                </button>
+                            ))}
                         </div>
 
-                        {/* Stats */}
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="bg-white p-4 rounded-xl shadow text-center">
-                                <div className="text-2xl font-bold text-blue-600">
-                                    {documents.filter(d => d.status === 'pending').length}
-                                </div>
-                                <div className="text-gray-600">Pending Review</div>
+                        {loading ? (
+                            <div className="py-20 text-center">
+                                <RefreshCw className="animate-spin text-blue-600 mx-auto mb-4" size={32} />
+                                <p className="text-[10px] font-black text-slate-400 uppercase">Indexing Archive...</p>
                             </div>
-                            <div className="bg-white p-4 rounded-xl shadow text-center">
-                                <div className="text-2xl font-bold text-green-600">
-                                    {documents.filter(d => d.status === 'approved').length}
-                                </div>
-                                <div className="text-gray-600">Approved</div>
-                            </div>
-                            <div className="bg-white p-4 rounded-xl shadow text-center">
-                                <div className="text-2xl font-bold text-red-600">
-                                    {documents.filter(d => d.status === 'rejected').length}
-                                </div>
-                                <div className="text-gray-600">Rejected</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right: Document Details & Actions */}
-                    <div className="lg:col-span-1">
-                        <div className="bg-white rounded-xl shadow p-6 sticky top-6">
-                            {selectedDoc ? (
-                                <>
-                                    <h2 className="text-xl font-bold mb-4">Document Review</h2>
-
-                                    <div className="space-y-4 mb-6">
-                                        <div>
-                                            <div className="text-sm text-gray-600">Ticket ID</div>
-                                            <div className="font-bold">{selectedDoc.ticketId}</div>
+                        ) : (
+                            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
+                                {filteredDocs.map(doc => (
+                                    <div key={doc.id} onClick={() => setSelectedDoc(doc)} className={`bg-white p-5 rounded-2xl border-2 transition-all cursor-pointer ${selectedDoc?.id === doc.id ? 'border-blue-500 shadow-xl ring-4 ring-blue-50' : 'border-transparent shadow-sm hover:border-slate-200'}`}>
+                                        <div className="flex justify-between items-start mb-3">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{doc.ticketId}</span>
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${doc.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                {doc.status}
+                                            </span>
                                         </div>
-                                        <div>
-                                            <div className="text-sm text-gray-600">Customer</div>
-                                            <div className="font-medium">{selectedDoc.customer}</div>
-                                        </div>
-                                        <div>
-                                            <div className="text-sm text-gray-600">Request Type</div>
-                                            <div className="font-medium">{selectedDoc.requestType}</div>
-                                        </div>
-                                        <div>
-                                            <div className="text-sm text-gray-600">Uploaded</div>
-                                            <div>{selectedDoc.uploaded}</div>
-                                        </div>
-                                        
-                                        {/* Documents List */}
-                                        <div>
-                                            <div className="text-sm text-gray-600 mb-3 font-semibold">
-                                                Submitted Documents ({selectedDoc.documentCount})
-                                            </div>
-                                            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                                                {selectedDoc.documents.map((doc, index) => (
-                                                    <div key={doc.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                                        <div className="flex items-start justify-between mb-2">
-                                                            <div className="flex-1">
-                                                                <div className="font-semibold text-gray-800 text-sm mb-1">
-                                                                    {index + 1}. {doc.name}
-                                                                </div>
-                                                                <div className="text-xs text-gray-600">{doc.fileName}</div>
-                                                                <div className="text-xs text-gray-500 mt-1">{doc.size}</div>
-                                                            </div>
-                                                            {doc.downloadUrl || doc.previewUrl !== '#' ? (
-                                                                <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">Available</span>
-                                                            ) : (
-                                                                <span className="px-2 py-1 bg-gray-100 text-gray-500 text-xs rounded-full">N/A</span>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex gap-2 mt-2">
-                                                            <button
-                                                                onClick={() => handlePreview(doc)}
-                                                                className="flex-1 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 flex items-center justify-center"
-                                                                title="Preview"
-                                                            >
-                                                                <Eye size={12} className="mr-1" /> View
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDownload(doc)}
-                                                                className="flex-1 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700 flex items-center justify-center"
-                                                                title="Download"
-                                                            >
-                                                                <Download size={12} className="mr-1" /> Download
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handlePrint(doc)}
-                                                                className="flex-1 py-1.5 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 flex items-center justify-center"
-                                                                title="Print"
-                                                            >
-                                                                <Printer size={12} className="mr-1" /> Print
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                        <h3 className="font-black text-slate-900 leading-tight mb-4">{doc.customer}</h3>
+                                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
+                                            <span className="flex items-center gap-1"><FileText size={12} /> {doc.documentCount} FILES</span>
+                                            <span className="flex items-center gap-1 text-blue-600">VERIFY <ArrowRight size={12} /></span>
                                         </div>
                                     </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
-                                    {/* Action Buttons */}
-                                    {selectedDoc.status === 'pending' ? (
-                                        <div className="space-y-3">
-                                            <button
-                                                onClick={() => handleApprove(selectedDoc.id)}
-                                                className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold flex items-center justify-center"
-                                            >
-                                                <CheckCircle className="mr-2" /> Approve All Documents
-                                            </button>
-                                            <button
-                                                onClick={() => handleReject(selectedDoc.id)}
-                                                className="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold flex items-center justify-center"
-                                            >
-                                                <XCircle className="mr-2" /> Reject Documents
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div className={`p-4 rounded-lg ${selectedDoc.status === 'approved' ? 'bg-green-50' : 'bg-red-50'}`}>
-                                            <div className="font-bold mb-2">
-                                                {selectedDoc.status === 'approved' ? '✅ Approved' : '❌ Rejected'}
+                    {/* Review Column */}
+                    <div className="lg:col-span-8">
+                        {selectedDoc ? (
+                            <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100">
+                                <div className="bg-slate-900 p-8 text-white">
+                                    <h2 className="text-2xl font-black mb-2 italic tracking-tighter uppercase">Document Audit</h2>
+                                    <div className="flex flex-wrap gap-4 text-xs font-bold text-slate-400">
+                                        <span className="flex items-center gap-1"><User size={14} /> {selectedDoc.customer}</span>
+                                        <span className="flex items-center gap-1"><Clock size={14} /> Submitted {selectedDoc.uploaded}</span>
+                                    </div>
+                                </div>
+
+                                <div className="p-8">
+                                    <div className="grid md:grid-cols-2 gap-8 mb-10">
+                                        {selectedDoc.documents.map((file, idx) => (
+                                            <div key={idx} className="bg-slate-50 p-6 rounded-3xl border border-slate-100 group hover:border-blue-500 transition-all">
+                                                <div className="flex items-center gap-4 mb-4">
+                                                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm">
+                                                        <FileText size={24} />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <h4 className="font-black text-slate-900 text-sm truncate uppercase tracking-tighter">{file.name}</h4>
+                                                        <p className="text-[10px] text-slate-400 font-bold">{file.size} • {file.fileType.split('/')[1].toUpperCase()}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => window.open(file.previewUrl, '_blank')} className="flex-1 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase hover:bg-slate-50 transition-all">
+                                                        PREVIEW
+                                                    </button>
+                                                    <button onClick={() => window.open(file.previewUrl, '_blank')} className="p-2 bg-slate-900 text-white rounded-xl hover:bg-black transition-all">
+                                                        <Download size={16} />
+                                                    </button>
+                                                </div>
                                             </div>
-                                            {selectedDoc.status === 'approved' ? (
-                                                <div className="text-sm">
-                                                    By: {selectedDoc.approvedBy}<br />
-                                                    At: {selectedDoc.approvedAt}
-                                                </div>
-                                            ) : (
-                                                <div className="text-sm">
-                                                    Reason: {selectedDoc.reason}<br />
-                                                    By: {selectedDoc.rejectedBy}<br />
-                                                    At: {selectedDoc.rejectedAt}
-                                                </div>
-                                            )}
+                                        ))}
+                                    </div>
+
+                                    {selectedDoc.status === 'pending' && (
+                                        <div className="flex flex-col md:flex-row gap-4 border-t border-slate-50 pt-8">
+                                            <button onClick={() => { setDocToReject(selectedDoc); setShowRejectModal(true); }} className="flex-1 py-5 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest hover:bg-red-50 hover:text-red-600 transition-all">
+                                                REJECT APPLICATION
+                                            </button>
+                                            <button onClick={() => handleApprove(selectedDoc)} disabled={actionLoading} className="flex-[2] py-5 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95">
+                                                {actionLoading ? 'PROCESSING...' : 'APPROVE COMPLIANCE'}
+                                            </button>
                                         </div>
                                     )}
-                                </>
-                            ) : (
-                                <div className="text-center py-8">
-                                    <FileText className="mx-auto text-gray-300 mb-4" size={48} />
-                                    <h3 className="text-xl font-bold text-gray-600 mb-2">Select a Request</h3>
-                                    <p className="text-gray-500">Choose a request from the list to review all submitted documents</p>
                                 </div>
-                            )}
-                        </div>
-
-                        {/* Quick Notes */}
-                        <div className="bg-white rounded-xl shadow p-6 mt-6">
-                            <h3 className="font-bold mb-4 flex items-center">
-                                <AlertCircle className="mr-2" /> Validation Guidelines
-                            </h3>
-                            <ul className="space-y-2 text-sm text-gray-600">
-                                <li className="flex items-start">
-                                    <CheckCircle className="text-green-500 mr-2 mt-0.5" size={14} />
-                                    Check document expiration dates
-                                </li>
-                                <li className="flex items-start">
-                                    <CheckCircle className="text-green-500 mr-2 mt-0.5" size={14} />
-                                    Verify customer information matches
-                                </li>
-                                <li className="flex items-start">
-                                    <CheckCircle className="text-green-500 mr-2 mt-0.5" size={14} />
-                                    Ensure documents are clear and readable
-                                </li>
-                                <li className="flex items-start">
-                                    <CheckCircle className="text-green-500 mr-2 mt-0.5" size={14} />
-                                    Reject blurred or incomplete documents
-                                </li>
-                            </ul>
-                        </div>
+                            </div>
+                        ) : (
+                            <div className="h-full bg-slate-50 rounded-[2.5rem] border-4 border-dashed border-slate-200 flex flex-col items-center justify-center p-20 text-center">
+                                <div className="bg-white w-24 h-24 rounded-full flex items-center justify-center shadow-xl mb-6">
+                                    <ShieldCheck className="text-slate-200" size={48} />
+                                </div>
+                                <h3 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">Compliance Queue</h3>
+                                <p className="text-slate-500 font-medium max-w-xs mx-auto">Select a document group from the side-panel to begin the verification process.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Rejection Modal */}
+            {/* Reject Modal */}
             {showRejectModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b border-gray-200 sticky top-0 bg-white">
-                            <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-                                <XCircle className="mr-3 text-red-600" />
-                                Reject Document
-                            </h2>
-                            <p className="text-gray-600 mt-2">Select a reason for rejecting this document</p>
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="bg-red-600 p-8 text-white">
+                            <h2 className="text-2xl font-black italic uppercase tracking-tighter">Issue Rejection</h2>
+                            <p className="text-red-100 font-medium text-sm">Please select the discrepancy found in documentation</p>
                         </div>
-
-                        <div className="p-6 space-y-6">
-                            {rejectionReasons.map((category, catIndex) => (
-                                <div key={catIndex} className="space-y-3">
-                                    <h3 className="font-bold text-gray-800 text-lg mb-3">{category.category}</h3>
-                                    {category.reasons.map((reason, reasonIndex) => (
-                                        <label
-                                            key={reasonIndex}
-                                            className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all ${selectedRejectionReason === reason
-                                                ? 'border-red-500 bg-red-50'
-                                                : 'border-gray-200 hover:border-red-300 hover:bg-gray-50'
-                                                }`}
-                                        >
-                                            <input
-                                                type="radio"
-                                                name="rejectionReason"
-                                                value={reason}
-                                                checked={selectedRejectionReason === reason}
-                                                onChange={(e) => setSelectedRejectionReason(e.target.value)}
-                                                className="mt-1 mr-3 w-4 h-4 text-red-600"
-                                            />
-                                            <span className="text-gray-700 font-medium">{reason}</span>
-                                        </label>
-                                    ))}
-                                </div>
+                        <div className="p-8 space-y-4">
+                            {['Incomplete Identity Proof', 'Invalid Property Documents', 'Illegible Scan/Photo', 'Unauthorized Application', 'Expired Documents', 'Custom reason (specify below)'].map(r => (
+                                <button key={r} onClick={() => setSelectedRejectionReason(r)} className={`w-full p-4 rounded-2xl border-2 text-left text-sm font-bold transition-all ${selectedRejectionReason === r ? 'border-red-600 bg-red-50 text-red-700' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}>
+                                    {r}
+                                </button>
                             ))}
-
-                            {/* Custom Reason Input */}
                             {selectedRejectionReason === 'Custom reason (specify below)' && (
-                                <div className="mt-4">
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Enter custom rejection reason:
-                                    </label>
-                                    <textarea
-                                        value={customRejectionReason}
-                                        onChange={(e) => setCustomRejectionReason(e.target.value)}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                                        rows="4"
-                                        placeholder="Please provide a detailed reason for rejection..."
-                                    ></textarea>
-                                </div>
+                                <textarea onChange={(e) => setCustomRejectionReason(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-red-100 rounded-2xl outline-none text-sm" placeholder="Detail the discrepancy..." />
                             )}
                         </div>
-
-                        <div className="p-6 border-t border-gray-200 flex gap-3 sticky bottom-0 bg-white">
-                            <button
-                                onClick={cancelReject}
-                                className="flex-1 py-3 px-4 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-bold transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={confirmReject}
-                                className="flex-1 py-3 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold transition-colors flex items-center justify-center"
-                            >
-                                <XCircle className="mr-2" size={20} />
-                                Confirm Rejection
-                            </button>
+                        <div className="p-8 pt-0 flex gap-4">
+                            <button onClick={() => setShowRejectModal(false)} className="flex-1 py-4 font-black uppercase text-xs tracking-widest text-slate-400">Cancel</button>
+                            <button onClick={confirmReject} className="flex-[2] py-4 bg-red-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-red-100 hover:bg-red-700 transition-all">CONFIRM REJECTION</button>
                         </div>
                     </div>
                 </div>

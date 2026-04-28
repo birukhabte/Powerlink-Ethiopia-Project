@@ -1,30 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Wrench,
-    Map,
-    MessageSquare,
+    ListTodo,
     Clock,
+    CheckCircle,
+    Calendar,
     MapPin,
-    FileText,
+    ArrowRight,
+    Loader2,
     AlertTriangle,
-    ClipboardList,
-    CheckCircle2,
-    Timer,
-    Star,
-    Loader2
+    Activity
 } from 'lucide-react';
+import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api';
+import { useNavigate } from 'react-router-dom';
+import { useSocket } from '../../contexts/SocketContext';
 
 const TechDashboard = () => {
-    const [data, setData] = useState({
-        stats: [
-            { title: 'Tasks Today', value: '0', icon: <ClipboardList size={24} className="text-blue-600" />, color: 'bg-blue-100' },
-            { title: 'Completed', value: '0/0', icon: <CheckCircle2 size={24} className="text-green-600" />, color: 'bg-green-100' },
-            { title: 'Avg. Time/Task', value: '0 hrs', icon: <Timer size={24} className="text-yellow-600" />, color: 'bg-yellow-100' },
-            { title: 'Rating', value: '0/5', icon: <Star size={24} className="text-purple-600" />, color: 'bg-purple-100' }
-        ],
-        tasks: []
-    });
+    const navigate = useNavigate();
+    const { socket, isConnected } = useSocket();
+    const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -32,230 +26,243 @@ const TechDashboard = () => {
         fetchDashboardData();
     }, []);
 
+    // Real-time updates
+    useEffect(() => {
+        if (socket && isConnected) {
+            // Listen for new task assignments
+            socket.on('notification', (notification) => {
+                if (notification.type === 'info' && notification.title.includes('assigned')) {
+                    console.log('New task assigned:', notification);
+                    // Refresh dashboard data
+                    fetchDashboardData();
+                }
+            });
+
+            // Listen for task updates
+            socket.on('task-update', (updateData) => {
+                console.log('Task updated:', updateData);
+                fetchDashboardData();
+            });
+        }
+
+        return () => {
+            if (socket) {
+                socket.off('notification');
+                socket.off('task-update');
+            }
+        };
+    }, [socket, isConnected]);
+
     const fetchDashboardData = async () => {
         try {
-            setLoading(true);
             const token = localStorage.getItem('token');
             if (!token) {
-                setError('No authentication token found. Please login.');
+                setError('Please log in to access the dashboard.');
                 setLoading(false);
                 return;
             }
 
-            const response = await fetch(API_ENDPOINTS.dashboard.technician, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+            const response = await axios.get(API_ENDPOINTS.dashboard.technician, {
+                headers: { Authorization: `Bearer ${token}` }
             });
-            const result = await response.json();
-
-            if (result.success) {
-                const fetchedStats = [
-                    { title: 'Tasks Today', value: result.data.stats.tasksToday.toString(), icon: <ClipboardList size={24} className="text-blue-600" />, color: 'bg-blue-100' },
-                    { title: 'Completed', value: result.data.stats.completed, icon: <CheckCircle2 size={24} className="text-green-600" />, color: 'bg-green-100' },
-                    { title: 'Avg. Time/Task', value: result.data.stats.avgTime, icon: <Timer size={24} className="text-yellow-600" />, color: 'bg-yellow-100' },
-                    { title: 'Rating', value: result.data.stats.rating, icon: <Star size={24} className="text-purple-600" />, color: 'bg-purple-100' }
-                ];
-                setData({
-                    stats: fetchedStats,
-                    tasks: result.data.tasks
-                });
+            if (response.data.success) {
+                setData(response.data.data);
+                setError(null); // Clear any previous errors
             } else {
-                setError(result.error || 'Failed to fetch dashboard data');
+                setError('Failed to load dashboard data.');
             }
         } catch (err) {
-            console.error('Error fetching dashboard:', err);
-            setError('Connection error. Please try again.');
+            console.error('Error fetching technician dashboard:', err);
+            if (err.response) {
+                // Server responded with error status
+                if (err.response.status === 401) {
+                    setError('Authentication failed. Please log in again.');
+                } else if (err.response.status === 403) {
+                    setError('Access denied. You do not have permission to view this dashboard.');
+                } else {
+                    setError(`Server error: ${err.response.data?.error || 'Unknown error'}`);
+                }
+            } else if (err.request) {
+                // Network error
+                setError('Network error. Please check your connection and try again.');
+            } else {
+                // Other error
+                setError('Failed to load dashboard data.');
+            }
         } finally {
             setLoading(false);
         }
     };
 
-    const quickActions = [
-        { icon: <Wrench size={20} />, label: 'View Tasks', link: '/technician/tasks', color: 'bg-indigo-600 hover:bg-indigo-700' },
-        { icon: <Map size={20} />, label: 'Assigned Area', link: '/technician/map', color: 'bg-emerald-600 hover:bg-emerald-700' },
-        { icon: <MessageSquare size={20} />, label: 'Team Chat', link: '/technician/chat', color: 'bg-blue-600 hover:bg-blue-700' },
-        { icon: <Clock size={20} />, label: 'Update Status', link: '/technician/updates', color: 'bg-orange-600 hover:bg-orange-700' }
+    // Destructure data for easier access
+    const { stats = {}, assignedTasks = [], schedule = [] } = data || {};
+
+    const cards = [
+        { label: 'Assigned Tasks', value: stats.assigned || 0, icon: <ListTodo />, color: 'blue' },
+        { label: 'In Progress', value: stats.in_progress || 0, icon: <Clock />, color: 'orange' },
+        { label: 'Completed Today', value: stats.completed_today || 0, icon: <CheckCircle />, color: 'green' },
+        { label: 'Upcoming', value: stats.upcoming || 0, icon: <Calendar />, color: 'purple' },
     ];
-
-    const tools = [
-        { icon: <MapPin className="text-blue-500" />, label: 'Navigation', desc: 'Get directions to job sites' },
-        { icon: <FileText className="text-green-500" />, label: 'Work Reports', desc: 'Submit completion reports' },
-        { icon: <AlertTriangle className="text-yellow-500" />, label: 'Safety Checklist', desc: 'Daily safety verification' }
-    ];
-
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'In Progress': return 'text-blue-600 bg-blue-50';
-            case 'Pending': return 'text-yellow-600 bg-yellow-50';
-            case 'Scheduled': return 'text-gray-600 bg-gray-50';
-            case 'Completed': return 'text-green-600 bg-green-50';
-            default: return 'text-gray-600 bg-gray-50';
-        }
-    };
-
-    const getPriorityColor = (priority) => {
-        switch (priority) {
-            case 'High': return 'text-red-600 bg-red-50';
-            case 'Medium': return 'text-yellow-600 bg-yellow-50';
-            case 'Low': return 'text-green-600 bg-green-50';
-            default: return 'text-gray-600 bg-gray-50';
-        }
-    };
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
-                <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
-                <p className="text-gray-600 font-medium">Loading your dashboard...</p>
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
-                <div className="bg-red-50 p-6 rounded-2xl border border-red-100 max-w-md">
-                    <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                    <h2 className="text-xl font-bold text-gray-800 mb-2">Oops! Something went wrong</h2>
-                    <p className="text-gray-600 mb-6">{error}</p>
-                    <button 
-                        onClick={fetchDashboardData}
-                        className="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors"
-                    >
-                        Try Again
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const firstName = user.firstName || 'Technician';
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
-            <div className="max-w-7xl mx-auto space-y-8">
-                {/* Header */}
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Technician Dashboard</h1>
-                    <p className="text-gray-500">Welcome back, {firstName}</p>
+        <div className="space-y-8 animate-fade-in">
+            {/* Loading State */}
+            {loading && (
+                <div className="flex items-center justify-center min-h-[400px]">
+                    <div className="text-center">
+                        <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+                        <p className="text-gray-500 font-medium">Loading your dashboard...</p>
+                    </div>
                 </div>
+            )}
 
-                {/* Stats Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {data.stats.map((stat, index) => (
-                        <div key={index} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-gray-500 text-sm font-medium">{stat.title}</span>
-                                <div className={`p-2 rounded-lg ${stat.color}`}>
-                                    {stat.icon}
-                                </div>
-                            </div>
-                            <div className="text-2xl font-bold text-gray-800">{stat.value}</div>
-                        </div>
-                    ))}
+            {/* Error State */}
+            {error && !loading && (
+                <div className="flex items-center justify-center min-h-[400px]">
+                    <div className="text-center">
+                        <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                        <p className="text-red-600 font-medium mb-2">Failed to load dashboard</p>
+                        <p className="text-gray-500 text-sm">{error}</p>
+                        <button
+                            onClick={fetchDashboardData}
+                            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                            Try Again
+                        </button>
+                    </div>
                 </div>
+            )}
 
-                {/* Main Content Area */}
-                <div className="grid lg:grid-cols-3 gap-8">
-                    {/* Left Column: Tasks */}
-                    <div className="lg:col-span-2 space-y-6">
-                        {/* Quick Actions */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {quickActions.map((action, index) => (
-                                <button
-                                    key={index}
-                                    className={`${action.color} text-white p-4 rounded-xl shadow-md flex flex-col items-center justify-center transition-transform hover:scale-105 active:scale-95 space-y-2`}
-                                    onClick={() => window.location.href = action.link}
-                                >
-                                    <div>{action.icon}</div>
-                                    <span className="font-medium text-sm">{action.label}</span>
-                                </button>
-                            ))}
+            {/* Main Content */}
+            {!loading && !error && (
+                <>
+                    {/* Header */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Field Operations</h1>
+                            <p className="text-gray-500 font-medium">Manage your assignments and site visits.</p>
                         </div>
-
-                        {/* Today's Tasks */}
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                            <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-                                <h2 className="font-bold text-gray-800 flex items-center">
-                                    <ClipboardList className="mr-2 text-blue-600" size={20} />
-                                    Your Active Tasks
-                                </h2>
-                                <button onClick={() => window.location.href = '/technician/tasks'} className="text-sm text-blue-600 hover:text-blue-700 font-medium">View All</button>
-                            </div>
-                            <div className="divide-y divide-gray-100">
-                                {data.tasks.length === 0 ? (
-                                    <div className="p-12 text-center">
-                                        <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <ClipboardList className="text-gray-400" size={32} />
-                                        </div>
-                                        <h3 className="font-bold text-gray-800 mb-1">No tasks assigned</h3>
-                                        <p className="text-gray-500 text-sm">When you're assigned a task, it will appear here.</p>
-                                    </div>
-                                ) : (
-                                    data.tasks.map((task) => (
-                                        <div key={task.id} className="p-4 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => window.location.href = '/technician/tasks'}>
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div>
-                                                    <h3 className="font-bold text-gray-800">{task.type}</h3>
-                                                    <div className="text-sm text-gray-500 flex items-center mt-1">
-                                                        <MapPin size={14} className="mr-1" /> {task.location}
-                                                    </div>
-                                                </div>
-                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
-                                                    {task.status}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between items-center mt-3">
-                                                <div className="text-sm text-gray-600 flex items-center">
-                                                    <Clock size={14} className="mr-1" /> {task.time}
-                                                </div>
-                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
-                                                    {task.priority}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
+                        <div className="bg-green-50 px-4 py-2 rounded-2xl border border-green-100 flex items-center gap-3">
+                            <div className={`w-2 h-2 rounded-full animate-pulse ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                            <span className={`text-sm font-black uppercase tracking-widest ${isConnected ? 'text-green-700' : 'text-red-700'}`}>
+                                {isConnected ? 'Live Updates Active' : 'Connecting...'}
+                            </span>
                         </div>
                     </div>
 
-                    {/* Right Column: Tools & Resources */}
-                    <div className="space-y-6">
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-                            <h2 className="font-bold text-gray-800 mb-4">Quick Tools</h2>
-                            <div className="space-y-3">
-                                {tools.map((tool, index) => (
-                                    <button key={index} className="w-full flex items-center p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all text-left group">
-                                        <div className="mr-3 p-2 bg-gray-100 rounded-lg group-hover:bg-white transition-colors">
-                                            {tool.icon}
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {cards.map((card, idx) => (
+                    <div key={idx} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 group hover:shadow-xl hover:shadow-gray-200/50 transition-all">
+                        <div className={`p-3 rounded-2xl bg-${card.color}-50 text-${card.color}-600 w-fit mb-4 group-hover:scale-110 transition-transform`}>
+                            {card.icon}
+                        </div>
+                        <div className="text-gray-500 text-xs font-black uppercase tracking-widest mb-1">{card.label}</div>
+                        <div className="text-3xl font-black text-gray-900">{card.value}</div>
+                    </div>
+                ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Active Assignments */}
+                <div className="lg:col-span-2 bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                    <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/20">
+                        <h2 className="font-black text-gray-900 flex items-center gap-2">
+                            <ListTodo className="text-blue-600" />
+                            Active Assignments
+                        </h2>
+                        <button 
+                            onClick={() => navigate('/technician/tasks')}
+                            className="text-blue-600 text-xs font-black uppercase hover:underline flex items-center gap-1"
+                        >
+                            Task Manager <ArrowRight size={14} />
+                        </button>
+                    </div>
+                    <div className="flex-1">
+                        {assignedTasks.length === 0 ? (
+                            <div className="p-12 text-center text-gray-400">
+                                <Clock size={40} className="mx-auto mb-4 opacity-20" />
+                                <p className="font-medium">No active tasks assigned to you right now.</p>
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-gray-50">
+                                {assignedTasks.slice(0, 4).map(task => (
+                                    <div key={task.id} className="p-6 hover:bg-green-50/30 transition-colors flex items-center justify-between group">
+                                        <div className="flex items-start gap-4">
+                                            <div className={`mt-1 p-2 rounded-xl ${task.priority === 'high' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
+                                                <AlertTriangle size={16} />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="font-bold text-gray-900">{task.id}</span>
+                                                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                                                        {task.type === 'service_request' ? 'Service' : 'Outage'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-sm text-gray-500 font-medium flex items-center gap-1">
+                                                    <MapPin size={14} className="text-gray-400" /> {task.location}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <div className="font-bold text-gray-700">{tool.label}</div>
-                                            <div className="text-xs text-gray-500">{tool.desc}</div>
-                                        </div>
-                                    </button>
+                                        <button 
+                                            onClick={() => navigate('/technician/tasks')}
+                                            className="p-3 rounded-2xl bg-gray-50 text-gray-400 opacity-0 group-hover:opacity-100 group-hover:bg-green-600 group-hover:text-white transition-all shadow-lg"
+                                        >
+                                            <ArrowRight size={20} />
+                                        </button>
+                                    </div>
                                 ))}
                             </div>
-                        </div>
+                        )}
+                    </div>
+                </div>
 
-                        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl shadow-lg p-5 text-white">
-                            <div className="flex items-center mb-3">
-                                <AlertTriangle className="mr-2" />
-                                <h3 className="font-bold">Safety Reminder</h3>
+                {/* Schedule Snapshot */}
+                <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+                    <div className="p-6 border-b border-gray-50 bg-gray-50/20">
+                        <h2 className="font-black text-gray-900 flex items-center gap-2">
+                            <Calendar className="text-purple-600" />
+                            Daily Schedule
+                        </h2>
+                    </div>
+                    <div className="flex-1 p-6">
+                        {schedule.length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center text-center text-gray-400">
+                                <Calendar size={32} className="mb-2 opacity-20" />
+                                <p className="text-sm font-medium">No scheduled visits for today.</p>
                             </div>
-                            <p className="text-blue-100 text-sm mb-4">
-                                Remember to wear all required PPE before entering the site. Report any hazards immediately.
-                            </p>
-                            <button className="w-full py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium backdrop-blur-sm transition-colors">
-                                Verify Safety Checklist
-                            </button>
-                        </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {schedule.map((item, idx) => (
+                                    <div key={idx} className="flex gap-4 items-start relative pb-4 last:pb-0">
+                                        {idx !== schedule.length - 1 && (
+                                            <div className="absolute left-[15px] top-8 bottom-0 w-0.5 bg-gray-100"></div>
+                                        )}
+                                        <div className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center font-black text-xs flex-shrink-0 z-10 border-2 border-white">
+                                            {idx + 1}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="text-xs font-black text-purple-600 uppercase tracking-widest">
+                                                {new Date(item.scheduled_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                            <div className="font-bold text-gray-900 text-sm truncate">
+                                                {item.ticket_id || `OUT-${item.id}`}
+                                            </div>
+                                            <div className="text-xs text-gray-500 font-medium truncate">
+                                                {item.type === 'service_request' ? 
+                                                    `${item.city || ''}, ${item.woreda || ''}` : 
+                                                    item.address || 'Location not specified'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
+                </>
+            )}
         </div>
     );
 };

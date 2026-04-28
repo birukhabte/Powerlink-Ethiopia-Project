@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Home from './Navbar/Home';
 import Register from './Auth/Register';
 import Login from './Auth/Login';
@@ -15,7 +15,9 @@ import Report from './RolePages/Admin/Report';
 import SupervisorDashboard from './RolePages/Supervisor/SupervisorDashboard';
 import SupervisorLayout from './RolePages/Supervisor/SupervisorLayout';
 import ManageRequest from './RolePages/Supervisor/ManageRequest';
+import ManageOutages from './RolePages/Supervisor/ManageOutages';
 import DocValidation from './RolePages/Supervisor/DocValidation';
+import SupervisorChat from './RolePages/Supervisor/Chat';
 import TaskList from './RolePages/Technician/TaskList';
 import TechDashboard from './RolePages/Technician/TechDashboard';
 import TechLayout from './RolePages/Technician/TechLayout';
@@ -23,10 +25,11 @@ import ServiceMap from './RolePages/Technician/ServiceMap';
 import Schedule from './RolePages/Technician/Schedule';
 import TechChat from './RolePages/Technician/Chat';
 import Updates from './RolePages/Technician/Updates';
-import Chat from './RolePages/Admin/Chat';
+import AdminChat from './RolePages/Admin/Chat';
 import SharedProfile from './RolePages/Shared/Profile';
 import SharedHistory from './RolePages/Shared/History';
 import SharedNotifications from './RolePages/Shared/Notifications';
+
 function App() {
   return (
     <BrowserRouter>
@@ -47,30 +50,33 @@ function App() {
 
         {/* admin Dashboard Routes with Shared Layout */}
         <Route element={<DashboardLayout />}>
+          <Route path="/admin-dashboard" element={<AdminDashboard />} />
           <Route path="/admin/report" element={<Report />} />
           <Route path="/admin/register-staff" element={<StaffRegister />} />
           <Route path="/admin/notices" element={<NoticeAndAlerts />} />
-          <Route path="/admin-dashboard" element={<AdminDashboard />} />
           <Route path="/admin/manage-accounts" element={<ManageAccounts />} />
-          <Route path="/admin/chat" element={<Chat />} />
+          <Route path="/admin/chat" element={<AdminChat />} />
           <Route path="/admin/profile" element={<SharedProfile />} />
           <Route path="/admin/history" element={<SharedHistory />} />
           <Route path="/admin/notifications" element={<SharedNotifications />} />
         </Route>
+
         {/* supervisor Dashboard Routes with Shared Layout */}
         <Route element={<SupervisorLayout />}>
-          <Route path="/supervisor/validate" element={<DocValidation />} />
           <Route path="/supervisor-dashboard" element={<SupervisorDashboard />} />
           <Route path="/supervisor/requests" element={<ManageRequest />} />
-          <Route path="/supervisor/chat" element={<Chat />} />
+          <Route path="/supervisor/outages" element={<ManageOutages />} />
+          <Route path="/supervisor/validate" element={<DocValidation />} />
+          <Route path="/supervisor/chat" element={<SupervisorChat />} />
           <Route path="/supervisor/profile" element={<SharedProfile />} />
           <Route path="/supervisor/history" element={<SharedHistory />} />
           <Route path="/supervisor/notifications" element={<SharedNotifications />} />
         </Route>
+
         {/* technician Dashboard Routes with Shared Layout */}
         <Route element={<TechLayout />}>
-          <Route path="/technician/tasks" element={<TaskList />} />
           <Route path="/technician-dashboard" element={<TechDashboard />} />
+          <Route path="/technician/tasks" element={<TaskList />} />
           <Route path="/technician/map" element={<ServiceMap />} />
           <Route path="/technician/schedule" element={<Schedule />} />
           <Route path="/technician/chat" element={<TechChat />} />
@@ -79,6 +85,9 @@ function App() {
           <Route path="/technician/history" element={<SharedHistory />} />
           <Route path="/technician/notifications" element={<SharedNotifications />} />
         </Route>
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

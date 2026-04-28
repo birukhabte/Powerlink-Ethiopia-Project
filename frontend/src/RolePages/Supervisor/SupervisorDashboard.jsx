@@ -1,248 +1,211 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Eye, FileCheck, Users, BarChart, Clock, AlertTriangle, CheckCircle, Activity, Loader2 } from 'lucide-react';
+import {
+    ClipboardList,
+    Clock,
+    CheckCircle,
+    AlertCircle,
+    Users,
+    TrendingUp,
+    MapPin,
+    ArrowRight,
+    Loader2
+} from 'lucide-react';
+import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api';
+import { useNavigate } from 'react-router-dom';
 
 const SupervisorDashboard = () => {
     const navigate = useNavigate();
-    const [pendingRequests, setPendingRequests] = useState([]);
+    const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [stats, setStats] = useState([
-        { title: 'Pending Validations', value: '0', icon: <FileCheck size={24} className="text-yellow-600" />, color: 'bg-yellow-100', border: 'border-yellow-200' },
-        { title: 'Active Technicians', value: '0/0', icon: <Users size={24} className="text-blue-600" />, color: 'bg-blue-100', border: 'border-blue-200' },
-        { title: 'Open Requests', value: '0', icon: <Activity size={24} className="text-green-600" />, color: 'bg-green-100', border: 'border-green-200' },
-        { title: 'Avg. Response Time', value: '0 hrs', icon: <Clock size={24} className="text-purple-600" />, color: 'bg-purple-100', border: 'border-purple-200' }
-    ]);
 
     useEffect(() => {
+        const fetchDashboardData = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await axios.get(API_ENDPOINTS.dashboard.supervisor, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (response.data.success) {
+                    setData(response.data.data);
+                }
+            } catch (err) {
+                console.error('Error fetching supervisor dashboard:', err);
+                setError('Failed to load dashboard. Please try again.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
         fetchDashboardData();
-        const interval = setInterval(fetchDashboardData, 60000);
-        return () => clearInterval(interval);
     }, []);
 
-    const fetchDashboardData = async () => {
-        try {
-            setLoading(true);
-            const token = localStorage.getItem('token');
-            
-            if (!token) {
-                setError('No authentication token found. Please login.');
-                setLoading(false);
-                return;
-            }
-
-            const response = await fetch(API_ENDPOINTS.dashboard.supervisor, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            const result = await response.json();
-
-            if (result.success) {
-                const data = result.data;
-                setPendingRequests(data.requests);
-                
-                setStats([
-                    { title: 'Pending Validations', value: data.stats.pendingValidations.toString(), icon: <FileCheck size={24} className="text-yellow-600" />, color: 'bg-yellow-100', border: 'border-yellow-200' },
-                    { title: 'Active Technicians', value: data.stats.activeTechnicians, icon: <Users size={24} className="text-blue-600" />, color: 'bg-blue-100', border: 'border-blue-200' },
-                    { title: 'Open Requests', value: data.stats.openRequests.toString(), icon: <Activity size={24} className="text-green-600" />, color: 'bg-green-100', border: 'border-green-200' },
-                    { title: 'Avg. Response Time', value: data.stats.avgResponseTime, icon: <Clock size={24} className="text-purple-600" />, color: 'bg-purple-100', border: 'border-purple-200' }
-                ]);
-                setError(null);
-            } else {
-                setError(result.error || 'Failed to fetch dashboard data');
-            }
-        } catch (error) {
-            console.error('Error fetching supervisor dashboard:', error);
-            setError('Connection error. Please check if the server is running.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const quickActions = [
-        { icon: <Eye size={20} />, label: 'Review Requests', link: '/supervisor/requests', color: 'bg-indigo-600 hover:bg-indigo-700' },
-        { icon: <FileCheck size={20} />, label: 'Validate Docs', link: '/supervisor/validate', color: 'bg-emerald-600 hover:bg-emerald-700' },
-        { icon: <Users size={20} />, label: 'Assign Tasks', link: '/supervisor/assign', color: 'bg-blue-600 hover:bg-blue-700' },
-        { icon: <BarChart size={20} />, label: 'Team Performance', link: '/supervisor/performance', color: 'bg-orange-600 hover:bg-orange-700' }
-    ];
-
-    const formatServiceType = (serviceType) => {
-        const serviceMap = {
-            'new-service': 'New Service Connection',
-            'relocation': 'Service Relocation',
-            'name-change': 'Name Change',
-            'tariff-change': 'Tariff Change',
-            'meter-separation': 'Meter Separation'
-        };
-        return serviceMap[serviceType] || serviceType;
-    };
-
-    const calculateWaitTime = (createdAt) => {
-        const now = new Date();
-        const created = new Date(createdAt);
-        const diffMs = now - created;
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMins / 60);
-        
-        if (diffHours > 0) {
-            return `${diffHours} hr${diffHours > 1 ? 's' : ''}`;
-        }
-        return `${diffMins} min${diffMins !== 1 ? 's' : ''}`;
-    };
-
-    const highPriorityRequests = pendingRequests.filter(r => r.priority === 'high');
-    const normalPriorityRequests = pendingRequests.filter(r => r.priority !== 'high');
-
-    const teamOverview = [
-        { name: 'Tech-023', status: 'On-site', tasks: 3, efficiency: '95%' },
-        { name: 'Tech-045', status: 'Available', tasks: 1, efficiency: '92%' },
-        { name: 'Tech-067', status: 'On-break', tasks: 2, efficiency: '88%' }
-    ];
-
-    if (loading && pendingRequests.length === 0) {
+    if (loading) {
         return (
-            <div className="min-h-[80vh] flex flex-col items-center justify-center">
+            <div className="h-full flex flex-col items-center justify-center p-10">
                 <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
-                <p className="text-gray-600 font-medium">Loading supervisor dashboard...</p>
+                <p className="text-gray-500 font-bold">Synchronizing dispatch data...</p>
             </div>
         );
     }
 
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const firstName = user.firstName || 'Supervisor';
+    const { stats, pendingRequests, pendingOutages, activeTechnicians } = data;
+
+    const statCards = [
+        { label: 'Total Requests', value: stats.total, icon: <ClipboardList />, color: 'blue' },
+        { label: 'Pending Dispatch', value: stats.pending, icon: <Clock />, color: 'amber' },
+        { label: 'Active Tasks', value: stats.in_progress + stats.assigned, icon: <TrendingUp />, color: 'indigo' },
+        { label: 'Recently Completed', value: stats.completed, icon: <CheckCircle />, color: 'green' },
+    ];
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-6">
-            <div className="flex justify-between items-start">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Supervisor Dashboard</h1>
-                    <p className="text-gray-500">Welcome back, {firstName}. Here is the field overview.</p>
+        <div className="space-y-8 animate-fade-in">
+            {/* Header */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Operations Center</h1>
+                <p className="text-gray-500 font-medium">Monitoring service flow and technician dispatch.</p>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {statCards.map((card, idx) => (
+                    <div key={idx} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-lg transition-all group">
+                        <div className={`p-3 rounded-2xl bg-${card.color}-50 text-${card.color}-600 w-fit mb-4 group-hover:scale-110 transition-transform`}>
+                            {card.icon}
+                        </div>
+                        <div className="text-gray-500 text-xs font-black uppercase tracking-widest mb-1">{card.label}</div>
+                        <div className="text-3xl font-black text-gray-900">{card.value}</div>
+                    </div>
+                ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Urgent Pending Requests */}
+                <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                    <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+                        <h2 className="font-black text-gray-900 flex items-center gap-2">
+                            <AlertCircle className="text-amber-500" />
+                            Urgent Requests ({pendingRequests.length + pendingOutages.length})
+                        </h2>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => navigate('/supervisor/requests')}
+                                className="text-blue-600 text-xs font-black uppercase hover:underline flex items-center gap-1"
+                            >
+                                Service <ArrowRight size={14} />
+                            </button>
+                            <button 
+                                onClick={() => navigate('/supervisor/outages')}
+                                className="text-orange-600 text-xs font-black uppercase hover:underline flex items-center gap-1"
+                            >
+                                Outages <ArrowRight size={14} />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="flex-1">
+                        {pendingRequests.length === 0 && pendingOutages.length === 0 ? (
+                            <div className="p-10 text-center text-gray-400 font-medium">No pending requests found</div>
+                        ) : (
+                            <div className="divide-y divide-gray-50 max-h-80 overflow-y-auto">
+                                {/* Service Requests */}
+                                {pendingRequests.slice(0, 3).map(req => (
+                                    <div key={`service-${req.id}`} className="p-5 hover:bg-blue-50/30 transition-colors flex items-center justify-between group">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className={`w-2 h-2 rounded-full ${req.priority === 'high' ? 'bg-red-500' : 'bg-amber-400'}`}></span>
+                                                <span className="font-bold text-gray-900 text-sm">{req.ticket_id}</span>
+                                                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold uppercase">Service</span>
+                                            </div>
+                                            <p className="text-xs text-gray-500 truncate font-medium flex items-center gap-1">
+                                                <MapPin size={12} /> {req.full_address}
+                                            </p>
+                                        </div>
+                                        <button 
+                                            onClick={() => navigate('/supervisor/requests')}
+                                            className="p-2 rounded-xl bg-blue-50 text-blue-600 opacity-0 group-hover:opacity-100 transition-all"
+                                        >
+                                            <ArrowRight size={18} />
+                                        </button>
+                                    </div>
+                                ))}
+                                
+                                {/* Outage Reports */}
+                                {pendingOutages.slice(0, 3).map(outage => (
+                                    <div key={`outage-${outage.id}`} className="p-5 hover:bg-orange-50/30 transition-colors flex items-center justify-between group">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className={`w-2 h-2 rounded-full ${outage.urgency === 'high' ? 'bg-red-500' : 'bg-amber-400'}`}></span>
+                                                <span className="font-bold text-gray-900 text-sm">OUT-{outage.id}</span>
+                                                <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-bold uppercase">Outage</span>
+                                            </div>
+                                            <p className="text-xs text-gray-500 truncate font-medium flex items-center gap-1">
+                                                <MapPin size={12} /> {outage.address}
+                                            </p>
+                                        </div>
+                                        <button 
+                                            onClick={() => navigate('/supervisor/outages')}
+                                            className="p-2 rounded-xl bg-orange-50 text-orange-600 opacity-0 group-hover:opacity-100 transition-all"
+                                        >
+                                            <ArrowRight size={18} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Available Technicians */}
+                <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                    <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+                        <h2 className="font-black text-gray-900 flex items-center gap-2">
+                            <Users className="text-green-600" />
+                            Dispatchable Technicians
+                        </h2>
+                    </div>
+                    <div className="flex-1">
+                        {activeTechnicians.length === 0 ? (
+                            <div className="p-10 text-center text-gray-400 font-medium">No technicians online</div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6">
+                                {activeTechnicians.map(tech => (
+                                    <div key={tech.id} className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-black text-lg">
+                                            {tech.first_name?.[0] || 'T'}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="font-bold text-gray-900 text-sm truncate">{tech.first_name} {tech.last_name}</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                                <span className="text-[10px] font-bold text-gray-500 uppercase">Available</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Performance Banner */}
+            <div className="bg-blue-600 p-8 rounded-[2rem] text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl shadow-blue-200">
+                <div className="flex items-center gap-6">
+                    <div className="p-4 bg-white/20 rounded-2xl backdrop-blur-md">
+                        <TrendingUp size={32} />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-black mb-1">Weekly Resolution Rate: 92%</h2>
+                        <p className="text-blue-100 font-medium text-sm">Response times are 15% faster than last month. Keep it up!</p>
+                    </div>
                 </div>
                 <button 
-                    onClick={fetchDashboardData}
-                    className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                    onClick={() => navigate('/supervisor/requests')}
+                    className="px-8 py-3 bg-white text-blue-600 rounded-2xl font-black hover:bg-blue-50 transition-all shadow-lg"
                 >
-                    <Activity size={20} className={loading ? "animate-pulse" : ""} />
+                    Review Queue
                 </button>
-            </div>
-
-            {error && (
-                <div className="bg-red-50 border border-red-100 p-4 rounded-xl flex items-center gap-3 text-red-700">
-                    <AlertTriangle size={20} />
-                    <p className="font-medium">{error}</p>
-                    <button onClick={fetchDashboardData} className="ml-auto underline font-bold">Retry</button>
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {stats.map((stat, index) => (
-                    <div key={index} className={`p-4 rounded-xl border ${stat.border} bg-white shadow-sm flex items-center justify-between`}>
-                        <div>
-                            <p className="text-sm text-gray-500 font-medium">{stat.title}</p>
-                            <h3 className="text-2xl font-bold text-gray-800 mt-1">{stat.value}</h3>
-                        </div>
-                        <div className={`p-3 rounded-lg ${stat.color}`}>
-                            {stat.icon}
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-                {quickActions.map((action, index) => (
-                    <button
-                        key={index}
-                        className={`${action.color} text-white px-4 py-2 rounded-lg shadow-sm flex items-center transition-all hover:translate-y-[-2px] font-medium text-sm`}
-                        onClick={() => navigate(action.link)}
-                    >
-                        <span className="mr-2">{action.icon}</span>
-                        {action.label}
-                    </button>
-                ))}
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-white rounded-xl shadow-sm border border-red-100 overflow-hidden">
-                        <div className="bg-red-50 px-6 py-4 border-b border-red-100 flex justify-between items-center">
-                            <h3 className="font-bold text-red-800 flex items-center">
-                                <AlertTriangle size={18} className="mr-2" />
-                                High Priority Queue
-                            </h3>
-                            <span className="bg-red-200 text-red-800 text-xs px-2 py-1 rounded-full font-bold">
-                                {highPriorityRequests.length} Pending
-                            </span>
-                        </div>
-                        {highPriorityRequests.length === 0 ? (
-                            <div className="p-8 text-center text-gray-500">No high priority requests</div>
-                        ) : (
-                            <div className="divide-y divide-gray-100">
-                                {highPriorityRequests.map((request) => (
-                                    <div key={request.id} className="p-4 hover:bg-gray-50 transition-colors flex justify-between items-center cursor-pointer" onClick={() => navigate('/supervisor/requests')}>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-bold text-gray-800">{request.ticket_id}</span>
-                                                <span className="text-gray-400">|</span>
-                                                <span className="font-medium text-gray-700">{formatServiceType(request.service_type)}</span>
-                                            </div>
-                                            <div className="text-xs text-gray-600 mt-1">{request.full_name} • {request.city}</div>
-                                            <div className="text-xs text-red-500 font-medium mt-1">Wait Time: {calculateWaitTime(request.created_at)}</div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="font-medium text-yellow-600 capitalize text-sm">{request.status.replace('_', ' ')}</div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                            <h3 className="font-bold text-gray-700">New Connection Requests</h3>
-                            <span className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full font-bold">
-                                {normalPriorityRequests.length} Pending
-                            </span>
-                        </div>
-                        {normalPriorityRequests.length === 0 ? (
-                            <div className="p-12 text-center text-gray-500">Queue is clear</div>
-                        ) : (
-                            <div className="divide-y divide-gray-100">
-                                {normalPriorityRequests.map((request) => (
-                                    <div key={request.id} className="p-4 hover:bg-gray-50 transition-colors flex justify-between items-center cursor-pointer" onClick={() => navigate('/supervisor/requests')}>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-bold text-gray-800">{request.ticket_id}</span>
-                                                <span className="text-gray-400">|</span>
-                                                <span className="font-medium text-gray-700">{formatServiceType(request.service_type)}</span>
-                                            </div>
-                                            <div className="text-xs text-gray-600 mt-1">{request.full_name} • {request.city}</div>
-                                        </div>
-                                        <button className="text-blue-600 text-sm font-medium hover:underline">Review</button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 h-fit">
-                    <div className="px-6 py-4 border-b border-gray-200">
-                        <h3 className="font-bold text-gray-800">Team Status</h3>
-                    </div>
-                    <div className="p-3">
-                        {teamOverview.map((tech, i) => (
-                            <div key={i} className="p-3 mb-2 rounded-lg border border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                                <span className="font-bold text-gray-800">{tech.name}</span>
-                                <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">{tech.status}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
             </div>
         </div>
     );

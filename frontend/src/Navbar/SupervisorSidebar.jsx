@@ -1,31 +1,31 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-    Home,
-    FileCheck,
-    Users,
-    BarChart,
-    LogOut,
-    Eye,
-    Bell,
+    LayoutDashboard,
+    ClipboardList,
+    CheckSquare,
     MessageSquare,
-    History
+    User,
+    History,
+    Bell,
+    LogOut,
+    AlertTriangle
 } from 'lucide-react';
+import NotificationBell from '../components/NotificationBell';
 
 const SupervisorSidebar = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
     const menuItems = [
-        { icon: <Home />, label: 'Dashboard', path: '/supervisor-dashboard' },
-        { icon: <Eye />, label: 'Review Requests', path: '/supervisor/requests' },
-        { icon: <FileCheck />, label: 'Validate Docs', path: '/supervisor/validate' },
-        { icon: <Users />, label: 'Assign Tasks', path: '/supervisor/assign' },
-        { icon: <BarChart />, label: 'Team Performance', path: '/supervisor/performance' },
-        { icon: <MessageSquare />, label: 'Chat', path: '/supervisor/chat' },
-        { icon: <Bell />, label: 'Notifications', path: '/supervisor/notifications' },
-        { icon: <History />, label: 'History', path: '/supervisor/history' },
-        { icon: <Users />, label: 'Profile', path: '/supervisor/profile' },
+        { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/supervisor-dashboard' },
+        { icon: <ClipboardList size={20} />, label: 'Manage Requests', path: '/supervisor/requests' },
+        { icon: <AlertTriangle size={20} />, label: 'Manage Outages', path: '/supervisor/outages' },
+        { icon: <CheckSquare size={20} />, label: 'Doc Validation', path: '/supervisor/validate' },
+        { icon: <MessageSquare size={20} />, label: 'Chat', path: '/supervisor/chat' },
+        { icon: <History size={20} />, label: 'History', path: '/supervisor/history' },
+        { icon: <Bell size={20} />, label: 'Notifications', path: '/supervisor/notifications' },
+        { icon: <User size={20} />, label: 'Profile', path: '/supervisor/profile' },
     ];
 
     const handleLogout = () => {
@@ -34,52 +34,54 @@ const SupervisorSidebar = () => {
         navigate('/');
     };
 
-    // Get user from localStorage
     const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const firstName = user.firstName || 'Supervisor';
-    const firstLetter = firstName.charAt(0).toUpperCase();
+    const firstName = user.first_name || user.firstName || 'Supervisor';
 
     return (
-        <aside className="hidden md:flex flex-col w-64 bg-white h-screen shadow-md p-4 sticky top-0 overflow-y-auto custom-scrollbar">
-            <div className="mb-8 p-4 bg-blue-50 rounded-lg flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xl shadow-md">
-                    {firstLetter}
+        <aside className="hidden md:flex flex-col w-64 bg-white h-screen shadow-md p-4 sticky top-0 overflow-y-auto border-r border-gray-100">
+            <div className="mb-4 flex justify-between items-center px-2">
+                <div className="font-black text-xl text-blue-600 tracking-tighter italic">POWERLINK</div>
+                <NotificationBell />
+            </div>
+
+            <div className="mb-8 p-4 bg-blue-50 rounded-xl flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+                    {firstName.charAt(0).toUpperCase()}
                 </div>
-                <div>
-                    <div className="font-bold text-blue-700">
-                        {firstName}
-                    </div>
-                    <div className="text-xs text-gray-600">
-                        Field Supervisor
-                    </div>
+                <div className="min-w-0">
+                    <div className="font-bold text-blue-700 truncate">{firstName}</div>
+                    <div className="text-[10px] text-gray-500 uppercase tracking-widest font-black">Supervisor</div>
                 </div>
             </div>
 
-            <nav className="space-y-2 flex-1 flex flex-col">
-                {menuItems.map((item, idx) => (
-                    <button
-                        key={idx}
-                        onClick={() => navigate(item.path)}
-                        className={`w-full flex items-center space-x-3 p-3 rounded-lg text-left cursor-pointer transition-colors duration-200 ${location.pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'
-                            }`}
-                    >
-                        <span className={`${location.pathname === item.path ? 'text-blue-700' : 'text-gray-400'}`}>
-                            {item.icon}
-                        </span>
-                        <span className="font-medium">{item.label}</span>
-                    </button>
-                ))}
-
-                <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center space-x-3 p-3 rounded-lg text-left cursor-pointer transition-colors duration-200 text-red-600 hover:bg-red-50 mt-auto"
-                >
-                    <span className="text-red-500">
-                        <LogOut />
-                    </span>
-                    <span className="font-medium">Logout</span>
-                </button>
+            <nav className="space-y-1 flex-1">
+                {menuItems.map((item, idx) => {
+                    const isActive = location.pathname === item.path;
+                    return (
+                        <button
+                            key={idx}
+                            onClick={() => navigate(item.path)}
+                            className={`w-full flex items-center space-x-3 p-3 rounded-xl text-left transition-all duration-200 group ${isActive
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                                : 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'
+                                }`}
+                        >
+                            <span className={`${isActive ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`}>
+                                {item.icon}
+                            </span>
+                            <span className="font-semibold text-sm">{item.label}</span>
+                        </button>
+                    );
+                })}
             </nav>
+
+            <button
+                onClick={handleLogout}
+                className="mt-auto w-full flex items-center space-x-3 p-3 rounded-xl text-left text-red-500 hover:bg-red-50 transition-all duration-200 font-semibold text-sm"
+            >
+                <LogOut size={20} />
+                <span>Logout</span>
+            </button>
         </aside>
     );
 };
