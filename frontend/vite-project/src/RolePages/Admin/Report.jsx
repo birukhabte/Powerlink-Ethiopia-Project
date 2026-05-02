@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import {
     BarChart3,
     PieChart,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 
 const Report = () => {
+    const { darkMode } = useOutletContext();
     const [selectedReport, setSelectedReport] = useState('outage');
     const [timeRange, setTimeRange] = useState('monthly');
 
@@ -87,23 +89,31 @@ const Report = () => {
     const currentReport = reportData[selectedReport] || reportData.outage;
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
+        <div className="min-h-screen p-6">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2">System Reports & Analytics</h1>
-                    <p className="text-gray-600">View detailed statistics and performance metrics</p>
+                    <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-2`}>System Reports & Analytics</h1>
+                    <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>View detailed statistics and performance metrics</p>
                 </div>
 
                 {/* Report Selection */}
-                <div className="bg-white rounded-xl shadow p-6 mb-6">
+                <div className={`${darkMode ? 'bg-[#1f2a40] border-gray-700' : 'bg-white border-gray-200 shadow-md'} rounded-xl p-6 mb-6 border`}>
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                         <div className="flex flex-wrap gap-2">
                             {reports.map(report => (
                                 <button
                                     key={report.id}
                                     onClick={() => setSelectedReport(report.id)}
-                                    className={`px-4 py-2 rounded-lg flex items-center ${selectedReport === report.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                                    className={`px-4 py-2 rounded-lg flex items-center transition ${
+                                        selectedReport === report.id 
+                                            ? darkMode 
+                                                ? 'bg-gradient-to-r from-purple-600 to-cyan-600 text-white shadow-lg' 
+                                                : 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg'
+                                            : darkMode
+                                                ? 'bg-[#141b2d] text-gray-400 hover:text-white border border-gray-700'
+                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                                    }`}
                                 >
                                     {report.icon}
                                     <span className="ml-2">{report.label}</span>
@@ -113,36 +123,36 @@ const Report = () => {
 
                         <div className="flex items-center space-x-4">
                             <div className="flex items-center">
-                                <Calendar className="mr-2 text-gray-500" />
+                                <Calendar className={`mr-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`} />
                                 <select
                                     value={timeRange}
                                     onChange={(e) => setTimeRange(e.target.value)}
-                                    className="border border-gray-300 rounded-lg px-3 py-2"
+                                    className={`${darkMode ? 'bg-[#141b2d] border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900'} border rounded-lg px-3 py-2 focus:ring-2 ${darkMode ? 'focus:ring-cyan-400' : 'focus:ring-blue-500'}`}
                                 >
                                     {timeRanges.map(range => (
                                         <option key={range.id} value={range.id}>{range.label}</option>
                                     ))}
                                 </select>
                             </div>
-                            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center">
+                            <button className={`px-4 py-2 ${darkMode ? 'bg-gradient-to-r from-purple-600 to-cyan-600' : 'bg-gradient-to-r from-blue-600 to-blue-500'} text-white rounded-lg hover:opacity-90 transition flex items-center shadow-lg`}>
                                 <Download className="mr-2" /> Export PDF
                             </button>
                         </div>
                     </div>
 
                     {/* Report Title */}
-                    <h2 className="text-2xl font-bold text-gray-800 mb-6">
+                    <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-6`}>
                         {currentReport.title} - {timeRanges.find(t => t.id === timeRange)?.label} View
                     </h2>
 
                     {/* Metrics Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                         {currentReport.metrics.map((metric, idx) => (
-                            <div key={idx} className="bg-gray-50 p-4 rounded-xl">
-                                <div className="text-sm text-gray-600 mb-1">{metric.label}</div>
+                            <div key={idx} className={`${darkMode ? 'bg-[#141b2d] border-gray-700' : 'bg-gray-50 border-gray-200'} p-4 rounded-xl border`}>
+                                <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-1`}>{metric.label}</div>
                                 <div className="flex items-end justify-between">
-                                    <div className="text-2xl font-bold text-gray-800">{metric.value}</div>
-                                    <div className={`flex items-center ${metric.trend === 'up' ? 'text-green-500' : 'text-red-500'}`}>
+                                    <div className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{metric.value}</div>
+                                    <div className={`flex items-center ${metric.trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
                                         {metric.trend === 'up' ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
                                         <span className="ml-1 text-sm">{metric.change}</span>
                                     </div>
@@ -154,12 +164,12 @@ const Report = () => {
                     {/* Charts */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                         {/* Bar Chart */}
-                        <div className="bg-gray-50 p-6 rounded-xl">
+                        <div className={`${darkMode ? 'bg-[#141b2d] border-gray-700' : 'bg-gray-50 border-gray-200'} p-6 rounded-xl border`}>
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-bold flex items-center">
-                                    <BarChart3 className="mr-2" /> Distribution
+                                <h3 className={`font-bold flex items-center ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                    <BarChart3 className={`mr-2 ${darkMode ? 'text-cyan-400' : 'text-blue-600'}`} /> Distribution
                                 </h3>
-                                <Eye className="text-gray-400 cursor-pointer" />
+                                <Eye className={`${darkMode ? 'text-gray-400 hover:text-cyan-400' : 'text-gray-500 hover:text-blue-600'} cursor-pointer`} />
                             </div>
                             <div className="h-64 flex items-end space-x-4 justify-center pt-8">
                                 {currentReport.chartData.slice(0, 5).map((item, idx) => {
@@ -168,13 +178,13 @@ const Report = () => {
                                     return (
                                         <div key={idx} className="flex flex-col items-center">
                                             <div
-                                                className="w-12 bg-blue-600 rounded-t-lg"
+                                                className={`w-12 rounded-t-lg ${darkMode ? 'bg-gradient-to-t from-purple-600 to-cyan-600' : 'bg-gradient-to-t from-blue-600 to-blue-400'}`}
                                                 style={{ height: `${height}px` }}
                                             ></div>
-                                            <div className="mt-2 text-xs text-gray-600">
+                                            <div className={`mt-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                                                 {item.area || item.month || item.technician?.slice(0, 8)}
                                             </div>
-                                            <div className="text-sm font-bold">
+                                            <div className={`text-sm font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                                                 {item.outages || item.users || item.tasks}
                                             </div>
                                         </div>
@@ -184,12 +194,12 @@ const Report = () => {
                         </div>
 
                         {/* Line Chart */}
-                        <div className="bg-gray-50 p-6 rounded-xl">
+                        <div className={`${darkMode ? 'bg-[#141b2d] border-gray-700' : 'bg-gray-50 border-gray-200'} p-6 rounded-xl border`}>
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-bold flex items-center">
-                                    <LineChart className="mr-2" /> Trends
+                                <h3 className={`font-bold flex items-center ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                    <LineChart className={`mr-2 ${darkMode ? 'text-cyan-400' : 'text-blue-600'}`} /> Trends
                                 </h3>
-                                <Eye className="text-gray-400 cursor-pointer" />
+                                <Eye className={`${darkMode ? 'text-gray-400 hover:text-cyan-400' : 'text-gray-500 hover:text-blue-600'} cursor-pointer`} />
                             </div>
                             <div className="h-64 flex items-center justify-center">
                                 <div className="relative w-full h-full">
@@ -201,13 +211,13 @@ const Report = () => {
                                                 className="flex-1 mx-2 flex items-end justify-center"
                                             >
                                                 <div
-                                                    className="w-3/4 bg-green-500 rounded-t-lg"
+                                                    className={`w-3/4 rounded-t-lg ${darkMode ? 'bg-gradient-to-t from-green-600 to-green-400' : 'bg-gradient-to-t from-green-600 to-green-400'}`}
                                                     style={{ height: `${percent}%` }}
                                                 ></div>
                                             </div>
                                         ))}
                                     </div>
-                                    <div className="absolute bottom-0 left-0 right-0 flex justify-between text-xs text-gray-500 px-4">
+                                    <div className={`absolute bottom-0 left-0 right-0 flex justify-between text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} px-4`}>
                                         {['Week 1', 'Week 2', 'Week 3', 'Week 4'].map((label, idx) => (
                                             <div key={idx}>{label}</div>
                                         ))}
@@ -220,24 +230,24 @@ const Report = () => {
                     {/* Data Table */}
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="bg-gray-100">
+                            <thead className={darkMode ? 'bg-[#141b2d]' : 'bg-gray-50'}>
                                 <tr>
                                     {Object.keys(currentReport.chartData[0] || {}).map((key) => (
-                                        <th key={key} className="text-left p-3 font-semibold text-gray-700">
+                                        <th key={key} className={`text-left p-3 font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-700'}`}>
                                             {key.charAt(0).toUpperCase() + key.slice(1)}
                                         </th>
                                     ))}
-                                    <th className="text-left p-3 font-semibold text-gray-700">Status</th>
+                                    <th className={`text-left p-3 font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-700'}`}>Status</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className={`${darkMode ? 'divide-gray-700' : 'divide-gray-200'} divide-y`}>
                                 {currentReport.chartData.slice(0, 5).map((row, idx) => (
-                                    <tr key={idx} className="hover:bg-gray-50">
+                                    <tr key={idx} className={darkMode ? 'hover:bg-[#141b2d]' : 'hover:bg-gray-50'}>
                                         {Object.values(row).map((value, idx2) => (
-                                            <td key={idx2} className="p-3">{value}</td>
+                                            <td key={idx2} className={`p-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{value}</td>
                                         ))}
                                         <td className="p-3">
-                                            <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                            <span className={`px-2 py-1 text-xs rounded-full ${darkMode ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-green-100 text-green-800 border border-green-200'}`}>
                                                 Active
                                             </span>
                                         </td>
@@ -250,37 +260,37 @@ const Report = () => {
 
                 {/* Quick Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white p-6 rounded-xl shadow">
+                    <div className={`${darkMode ? 'bg-[#1f2a40] border-gray-700' : 'bg-white border-gray-200 shadow-md'} p-6 rounded-xl border`}>
                         <div className="flex items-center mb-4">
-                            <AlertTriangle className="text-red-500 mr-3" />
+                            <AlertTriangle className={`${darkMode ? 'text-red-400' : 'text-red-600'} mr-3`} />
                             <div>
-                                <div className="font-bold">Current Outages</div>
-                                <div className="text-2xl font-bold">23 Active</div>
+                                <div className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Current Outages</div>
+                                <div className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>23 Active</div>
                             </div>
                         </div>
-                        <div className="text-sm text-gray-600">5 critical, 18 standard</div>
+                        <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>5 critical, 18 standard</div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-xl shadow">
+                    <div className={`${darkMode ? 'bg-[#1f2a40] border-gray-700' : 'bg-white border-gray-200 shadow-md'} p-6 rounded-xl border`}>
                         <div className="flex items-center mb-4">
-                            <Users className="text-blue-500 mr-3" />
+                            <Users className={`${darkMode ? 'text-cyan-400' : 'text-blue-600'} mr-3`} />
                             <div>
-                                <div className="font-bold">Active Technicians</div>
-                                <div className="text-2xl font-bold">45/50</div>
+                                <div className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Active Technicians</div>
+                                <div className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>45/50</div>
                             </div>
                         </div>
-                        <div className="text-sm text-gray-600">90% availability rate</div>
+                        <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>90% availability rate</div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-xl shadow">
+                    <div className={`${darkMode ? 'bg-[#1f2a40] border-gray-700' : 'bg-white border-gray-200 shadow-md'} p-6 rounded-xl border`}>
                         <div className="flex items-center mb-4">
-                            <TrendingUp className="text-green-500 mr-3" />
+                            <TrendingUp className={`${darkMode ? 'text-green-400' : 'text-green-600'} mr-3`} />
                             <div>
-                                <div className="font-bold">Satisfaction Rate</div>
-                                <div className="text-2xl font-bold">96.2%</div>
+                                <div className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Satisfaction Rate</div>
+                                <div className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>96.2%</div>
                             </div>
                         </div>
-                        <div className="text-sm text-gray-600">+2.1% from last month</div>
+                        <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>+2.1% from last month</div>
                     </div>
                 </div>
             </div>
