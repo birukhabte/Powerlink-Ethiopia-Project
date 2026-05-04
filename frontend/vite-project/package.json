@@ -11,6 +11,7 @@
     "pre-deploy": "node pre-deploy-check.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.38.4",
     "@tailwindcss/vite": "^4.1.18",
     "axios": "^1.13.2",
     "framer-motion": "^11.18.2",

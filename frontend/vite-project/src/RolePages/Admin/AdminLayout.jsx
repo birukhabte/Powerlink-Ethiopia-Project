@@ -13,17 +13,63 @@ const AdminLayout = () => {
     const [showSettings, setShowSettings] = useState(false);
     const [darkMode, setDarkMode] = useState(localStorage.getItem('theme') === 'light' ? false : true);
     const [profilePhoto, setProfilePhoto] = useState(localStorage.getItem('adminProfilePhoto') || null);
+    const [showOutageForm, setShowOutageForm] = useState(false);
+    const [showMap, setShowMap] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
 
-    const menuItems = [
-        { icon: <Home size={18} />, label: 'Dashboard', path: '/admin-dashboard' },
-        { icon: <Users size={18} />, label: 'Manage Accounts', path: '/admin/manage-accounts' },
-        { icon: <UserPlus size={18} />, label: 'Register Staff', path: '/admin/register-staff' },
-        { icon: <Bell size={18} />, label: 'Notices & Alerts', path: '/admin/notices' },
-        { icon: <BarChart size={18} />, label: 'Reports Page', path: '/admin/report' },
-        { icon: <MessageSquare size={18} />, label: 'Chat', path: '/admin/chat' },
-    ];
+    // Check authentication on mount
+    React.useEffect(() => {
+        const token = localStorage.getItem('token');
+        const user = localStorage.getItem('user');
+        
+        if (!token || !user) {
+            navigate('/login');
+        }
+    }, [navigate]);
+
+    // Get user role from localStorage
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userRole = user.role || 'admin';
+
+    // Define menu items based on role
+    const getMenuItems = () => {
+        if (userRole === 'customer') {
+            return [
+                { icon: <Home size={18} />, label: 'Dashboard', path: '/dashboard' },
+                { icon: <AlertTriangle size={18} />, label: 'Report Outage', path: '/report-outage' },
+                { icon: <FileText size={18} />, label: 'My Tickets', path: '/ticket' },
+                { icon: <Wrench size={18} />, label: 'Request Service', path: '/request-service' },
+                { icon: <Bell size={18} />, label: 'Notifications', path: '/notifications' },
+                { icon: <FileText size={18} />, label: 'History', path: '/history' },
+                { icon: <User size={18} />, label: 'Profile', path: '/profile' },
+            ];
+        }
+
+        if (userRole === 'supervisor') {
+            return [
+                { icon: <Home size={18} />, label: 'Dashboard', path: '/dashboard' },
+                { icon: <Wrench size={18} />, label: 'Assign Tasks', path: '/supervisor/assign-tasks' },
+                { icon: <FileText size={18} />, label: 'Manage Requests', path: '/supervisor/requests' },
+                { icon: <Eye size={18} />, label: 'Validate Documents', path: '/supervisor/validate' },
+                { icon: <Bell size={18} />, label: 'Notifications', path: '/supervisor/notifications' },
+                { icon: <FileText size={18} />, label: 'History', path: '/supervisor/history' },
+                { icon: <MessageSquare size={18} />, label: 'Chat', path: '/supervisor/chat' },
+            ];
+        }
+        
+        // Admin menu (default)
+        return [
+            { icon: <Home size={18} />, label: 'Dashboard', path: '/dashboard' },
+            { icon: <Users size={18} />, label: 'Manage Accounts', path: '/admin/manage-accounts' },
+            { icon: <UserPlus size={18} />, label: 'Register Staff', path: '/admin/register-staff' },
+            { icon: <Bell size={18} />, label: 'Notices & Alerts', path: '/admin/notices' },
+            { icon: <BarChart size={18} />, label: 'Reports Page', path: '/admin/report' },
+            { icon: <MessageSquare size={18} />, label: 'Chat', path: '/admin/chat' },
+        ];
+    };
+
+    const menuItems = getMenuItems();
 
     const handlePhotoUpload = (e) => {
         const file = e.target.files[0];
@@ -65,7 +111,9 @@ const AdminLayout = () => {
             <div className={`${sidebarOpen ? 'w-64' : 'w-20'} ${darkMode ? 'bg-[#1f2a40]' : 'bg-white'} transition-all duration-300 flex flex-col ${darkMode ? 'border-r border-gray-700' : 'border-r border-gray-200 shadow-lg'}`}>
                 {/* Sidebar Header */}
                 <div className={`p-6 flex items-center justify-between ${darkMode ? 'border-b border-gray-700' : 'border-b border-gray-200'}`}>
-                    <h1 className={`text-xl font-bold ${!sidebarOpen && 'hidden'}`}>ADMIN</h1>
+                    <h1 className={`text-xl font-bold ${!sidebarOpen && 'hidden'}`}>
+                        {userRole === 'customer' ? 'CUSTOMER' : userRole === 'supervisor' ? 'SUPERVISOR' : 'ADMIN'}
+                    </h1>
                     <button onClick={() => setSidebarOpen(!sidebarOpen)} className={`${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}>
                         <Menu size={20} />
                     </button>
@@ -279,7 +327,7 @@ const AdminLayout = () => {
 
                 {/* Page Content */}
                 <div className="p-6">
-                    <Outlet context={{ darkMode }} />
+                    <Outlet context={{ darkMode, showOutageForm, setShowOutageForm, showMap, setShowMap }} />
                 </div>
             </div>
 

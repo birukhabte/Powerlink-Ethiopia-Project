@@ -16,7 +16,8 @@ import { API_ENDPOINTS } from '../../config/api';
 
 const Dashboard = () => {
     const navigate = useNavigate();
-    const { showOutageForm, setShowOutageForm, showMap, setShowMap } = useOutletContext();
+    const context = useOutletContext() || {};
+    const { showOutageForm = false, setShowOutageForm = () => {}, showMap = false, setShowMap = () => {} } = context;
     const [submitted, setSubmitted] = useState(false);
     const [errors, setErrors] = useState({});
 

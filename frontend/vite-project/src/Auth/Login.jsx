@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import { LogIn, Key, Mail, AlertCircle, User } from 'lucide-react';
-import axios from 'axios';
-import { API_ENDPOINTS } from '../config/api';
+import { LogIn, Key, Mail, AlertCircle } from 'lucide-react';
 
 const Login = () => {
     const [loginData, setLoginData] = useState({
@@ -11,6 +9,8 @@ const Login = () => {
 
     const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(false);
+
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -22,10 +22,7 @@ const Login = () => {
             const newErrors = {};
 
             if (!loginData.password) newErrors.password = 'Password required';
-
-            if (!loginData.email) {
-                newErrors.email = 'Email or BP Number required';
-            }
+            if (!loginData.email) newErrors.email = 'Email required';
 
             if (Object.keys(newErrors).length > 0) {
                 setErrors(newErrors);
@@ -33,57 +30,52 @@ const Login = () => {
                 return;
             }
 
-            // Prepare login credentials
-            const credentials = {
-                email: loginData.email,
-                password: loginData.password
-            };
+            // Call backend authentication API
+            const response = await fetch(`${API_URL}/api/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: loginData.email.toLowerCase(),
+                    password: loginData.password
+                })
+            });
 
-            // Make API call to backend
-            const response = await axios.post(API_ENDPOINTS.auth.login, credentials);
+            const data = await response.json();
 
-            // Store the JWT token in localStorage
-            localStorage.setItem('token', response.data.token);
-            localStorage.setItem('user', JSON.stringify(response.data.user));
+            if (!response.ok) {
+                setErrors({
+                    general: data.error || 'Invalid email or password'
+                });
+                setLoading(false);
+                return;
+            }
 
-            console.log('Login successful:', response.data);
+            // Store token and user data
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify(data.user));
 
-            // Redirect based on user role from backend
-            const userRole = response.data.user.role;
+            console.log('Login successful:', data.user);
+
+            // Redirect based on user role
+            const userRole = data.user.role;
             const redirects = {
                 customer: '/dashboard',
-                special: '/dashboard',
-                technician: '/technician-dashboard',
-                supervisor: '/supervisor-dashboard',
-                admin: '/admin-dashboard'
+                technician: '/dashboard',
+                supervisor: '/dashboard',
+                admin: '/dashboard'
             };
             window.location.href = redirects[userRole] || '/dashboard';
 
         } catch (error) {
             console.error('Login error:', error);
             setLoading(false);
-
-            // Handle different error scenarios
-            if (error.response) {
-                // Server responded with error
-                setErrors({
-                    general: error.response.data.error || 'Login failed. Please check your credentials.'
-                });
-            } else if (error.request) {
-                // Request made but no response (backend not running)
-                setErrors({
-                    general: 'Cannot connect to server. Please ensure the backend is running.'
-                });
-            } else {
-                // Something else happened
-                setErrors({
-                    general: 'An unexpected error occurred. Please try again.'
-                });
-            }
+            setErrors({
+                general: 'Connection error. Please check if backend is running.'
+            });
         }
     };
-
-
 
     return (
         <div className="h-screen flex items-center justify-center bg-gray-50 overflow-hidden p-4">
@@ -95,23 +87,32 @@ const Login = () => {
                     <p className="text-gray-600 text-sm">Access your account</p>
                 </div>
 
+                {/* Test Credentials Info */}
+                <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg mb-4">
+                    <p className="text-blue-800 text-xs font-semibold mb-2">Test Credentials:</p>
+                    <div className="text-xs text-blue-700 space-y-1">
+                        <div><strong>Admin:</strong> admin@system.com / SuperAdmin123!</div>
+                        <div><strong>Create new account:</strong> Use Register button</div>
+                    </div>
+                </div>
+
                 <form onSubmit={handleLogin} className="space-y-3">
                     {/* Email Input */}
                     <div>
                         <label className="block text-gray-700 text-sm font-medium mb-1 flex items-center">
-                            <Mail size={14} className="mr-2" /> Email or BP Number
+                            <Mail size={14} className="mr-2" /> Email
                         </label>
                         <input
-                            type="text"
-                            placeholder="Enter Email or BP Number"
+                            type="email"
+                            placeholder="Enter your email"
                             value={loginData.email}
                             onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-                            className="w-full p-2.5 border border-gray-300 rounded-lg text-sm"
+                            className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
                     </div>
 
-                    {/* Password - Always required */}
+                    {/* Password Input */}
                     <div>
                         <label className="block text-gray-700 text-sm font-medium mb-1 flex items-center">
                             <Key size={14} className="mr-2" /> Password
@@ -121,7 +122,7 @@ const Login = () => {
                             placeholder="Enter your password"
                             value={loginData.password}
                             onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                            className="w-full p-2.5 border border-gray-300 rounded-lg text-sm"
+                            className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
                     </div>
@@ -138,7 +139,7 @@ const Login = () => {
                     <button
                         type="submit"
                         disabled={loading}
-                        className={`w-full py-3 text-white rounded-lg font-bold mt-4 shadow-lg transform hover:scale-[1.02] transition-all ${loading ? 'opacity-70 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                        className={`w-full py-3 text-white rounded-lg font-bold mt-4 shadow-lg transform hover:scale-[1.02] transition-all ${loading ? 'opacity-70 cursor-not-allowed bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
                             }`}
                     >
                         {loading ? 'Logging in...' : 'Login'}
@@ -147,7 +148,7 @@ const Login = () => {
 
                 {/* Help Links */}
                 <div className="mt-6 text-center">
-                    <a href="/forgot-password" university-data-link className="text-blue-600 text-sm font-medium hover:underline block mb-2">Forgot Password?</a>
+                    <a href="/forgot-password" className="text-blue-600 text-sm font-medium hover:underline block mb-2">Forgot Password?</a>
                     <p className="text-gray-600 text-sm">
                         Don't have an account? <a href="/register" className="text-blue-600 font-bold hover:underline">Register</a>
                     </p>
