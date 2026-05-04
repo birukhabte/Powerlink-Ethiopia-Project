@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
 import {
     FileText,
     CheckCircle,
@@ -18,6 +18,7 @@ import {
 import API_BASE_URL, { API_ENDPOINTS } from '../../config/api';
 
 const DocValidation = () => {
+    const { darkMode } = useOutletContext() || { darkMode: true };
     const navigate = useNavigate();
     const location = useLocation();
     const targetRequestId = location.state?.requestId;
@@ -338,37 +339,37 @@ const DocValidation = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
+        <div className={`min-h-screen ${darkMode ? 'bg-[#141b2d]' : 'bg-gray-50'} p-6`}>
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2 flex items-center">
+                    <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'} mb-2 flex items-center`}>
                         <FileCheck className="mr-3" /> Document Validation
                     </h1>
-                    <p className="text-gray-600">Review and validate documents uploaded by users</p>
+                    <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Review and validate documents uploaded by users</p>
                 </div>
 
                 <div className="grid lg:grid-cols-3 gap-6">
                     {/* Left: Documents List */}
                     <div className="lg:col-span-2">
-                        <div className="bg-white rounded-xl shadow p-4 mb-6">
+                        <div className={`${darkMode ? 'bg-[#1f2a40] border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow p-4 mb-6 border`}>
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                                 <div className="relative flex-1 max-w-md">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                                    <input type="text" placeholder="Search documents..." className="w-full pl-10 pr-4 py-2 border rounded-lg" />
+                                    <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+                                    <input type="text" placeholder="Search documents..." className={`w-full pl-10 pr-4 py-2 border rounded-lg ${darkMode ? 'bg-[#141b2d] border-gray-700 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 ${darkMode ? 'focus:ring-cyan-400' : 'focus:ring-blue-500'}`} />
                                 </div>
                                 <div className="flex items-center space-x-4">
                                     <select
                                         value={filter}
                                         onChange={(e) => setFilter(e.target.value)}
-                                        className="border rounded-lg px-3 py-2"
+                                        className={`border rounded-lg px-3 py-2 ${darkMode ? 'bg-[#141b2d] border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 ${darkMode ? 'focus:ring-cyan-400' : 'focus:ring-blue-500'}`}
                                     >
                                         <option value="all">All Documents</option>
                                         <option value="pending">Pending Review</option>
                                         <option value="approved">Approved</option>
                                         <option value="rejected">Rejected</option>
                                     </select>
-                                    <span className="text-sm text-gray-600">
+                                    <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                                         {filteredDocs.length} documents
                                     </span>
                                 </div>
@@ -376,42 +377,42 @@ const DocValidation = () => {
 
                             {loading ? (
                                 <div className="text-center py-12">
-                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                                    <p className="text-gray-500 font-medium">Loading documents...</p>
+                                    <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${darkMode ? 'border-cyan-400' : 'border-blue-600'} mx-auto mb-4`}></div>
+                                    <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} font-medium`}>Loading documents...</p>
                                 </div>
                             ) : filteredDocs.length === 0 ? (
                                 <div className="text-center py-12">
-                                    <FileText size={48} className="mx-auto text-gray-300 mb-4" />
-                                    <p className="text-gray-500 font-medium">No documents found matching the criteria</p>
+                                    <FileText size={48} className={`mx-auto ${darkMode ? 'text-gray-600' : 'text-gray-300'} mb-4`} />
+                                    <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} font-medium`}>No documents found matching the criteria</p>
                                 </div>
                             ) : (
                                 <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                                     {filteredDocs.map(doc => (
                                         <div key={doc.id}
-                                            className={`p-4 border rounded-lg cursor-pointer hover:bg-gray-50 ${selectedDoc?.id === doc.id ? 'border-blue-500 bg-blue-50' : ''}`}
+                                            className={`p-4 border rounded-lg cursor-pointer ${darkMode ? 'bg-[#141b2d] border-gray-700 hover:bg-[#0f1419]' : 'bg-white border-gray-200 hover:bg-gray-50'} ${selectedDoc?.id === doc.id ? (darkMode ? 'border-cyan-400 bg-cyan-400/10' : 'border-blue-500 bg-blue-50') : ''}`}
                                             onClick={() => setSelectedDoc(doc)}
                                         >
                                             <div className="flex justify-between items-start mb-3">
                                                 <div>
-                                                    <div className="font-bold text-gray-800">{doc.ticketId}</div>
-                                                    <div className="text-sm text-gray-600">{doc.documentCount} document{doc.documentCount > 1 ? 's' : ''}</div>
+                                                    <div className={`font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>{doc.ticketId}</div>
+                                                    <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{doc.documentCount} document{doc.documentCount > 1 ? 's' : ''}</div>
                                                 </div>
                                                 <span className={`px-3 py-1 rounded-full text-xs ${getStatusColor(doc.status)}`}>
                                                     {doc.status.toUpperCase()}
                                                 </span>
                                             </div>
 
-                                            <div className="flex items-center text-sm text-gray-600 mb-2">
+                                            <div className={`flex items-center text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-2`}>
                                                 <User size={14} className="mr-2" /> {doc.customer}
                                             </div>
-                                            <div className="flex items-center text-sm text-gray-600 mb-2">
+                                            <div className={`flex items-center text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-2`}>
                                                 <FileText size={14} className="mr-2" /> {doc.requestType}
                                             </div>
                                             <div className="flex justify-between items-center">
-                                                <div className="flex items-center text-sm text-gray-500">
+                                                <div className={`flex items-center text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
                                                     <Clock size={14} className="mr-1" /> {doc.uploaded}
                                                 </div>
-                                                <ChevronRight size={16} className="text-blue-500" />
+                                                <ChevronRight size={16} className={darkMode ? 'text-cyan-400' : 'text-blue-500'} />
                                             </div>
                                         </div>
                                     ))}
@@ -421,92 +422,92 @@ const DocValidation = () => {
 
                         {/* Stats */}
                         <div className="grid grid-cols-3 gap-4">
-                            <div className="bg-white p-4 rounded-xl shadow text-center">
-                                <div className="text-2xl font-bold text-blue-600">
+                            <div className={`${darkMode ? 'bg-[#1f2a40] border-gray-700' : 'bg-white border-gray-200'} p-4 rounded-xl shadow text-center border`}>
+                                <div className={`text-2xl font-bold ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                                     {documents.filter(d => d.status === 'pending').length}
                                 </div>
-                                <div className="text-gray-600">Pending Review</div>
+                                <div className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Pending Review</div>
                             </div>
-                            <div className="bg-white p-4 rounded-xl shadow text-center">
-                                <div className="text-2xl font-bold text-green-600">
+                            <div className={`${darkMode ? 'bg-[#1f2a40] border-gray-700' : 'bg-white border-gray-200'} p-4 rounded-xl shadow text-center border`}>
+                                <div className={`text-2xl font-bold ${darkMode ? 'text-green-400' : 'text-green-600'}`}>
                                     {documents.filter(d => d.status === 'approved').length}
                                 </div>
-                                <div className="text-gray-600">Approved</div>
+                                <div className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Approved</div>
                             </div>
-                            <div className="bg-white p-4 rounded-xl shadow text-center">
-                                <div className="text-2xl font-bold text-red-600">
+                            <div className={`${darkMode ? 'bg-[#1f2a40] border-gray-700' : 'bg-white border-gray-200'} p-4 rounded-xl shadow text-center border`}>
+                                <div className={`text-2xl font-bold ${darkMode ? 'text-red-400' : 'text-red-600'}`}>
                                     {documents.filter(d => d.status === 'rejected').length}
                                 </div>
-                                <div className="text-gray-600">Rejected</div>
+                                <div className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Rejected</div>
                             </div>
                         </div>
                     </div>
 
                     {/* Right: Document Details & Actions */}
                     <div className="lg:col-span-1">
-                        <div className="bg-white rounded-xl shadow p-6 sticky top-6">
+                        <div className={`${darkMode ? 'bg-[#1f2a40] border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow p-6 sticky top-6 border`}>
                             {selectedDoc ? (
                                 <>
-                                    <h2 className="text-xl font-bold mb-4">Document Review</h2>
+                                    <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Document Review</h2>
 
                                     <div className="space-y-4 mb-6">
                                         <div>
-                                            <div className="text-sm text-gray-600">Ticket ID</div>
-                                            <div className="font-bold">{selectedDoc.ticketId}</div>
+                                            <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Ticket ID</div>
+                                            <div className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{selectedDoc.ticketId}</div>
                                         </div>
                                         <div>
-                                            <div className="text-sm text-gray-600">Customer</div>
-                                            <div className="font-medium">{selectedDoc.customer}</div>
+                                            <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Customer</div>
+                                            <div className={`font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{selectedDoc.customer}</div>
                                         </div>
                                         <div>
-                                            <div className="text-sm text-gray-600">Request Type</div>
-                                            <div className="font-medium">{selectedDoc.requestType}</div>
+                                            <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Request Type</div>
+                                            <div className={`font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{selectedDoc.requestType}</div>
                                         </div>
                                         <div>
-                                            <div className="text-sm text-gray-600">Uploaded</div>
-                                            <div>{selectedDoc.uploaded}</div>
+                                            <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Uploaded</div>
+                                            <div className={darkMode ? 'text-gray-300' : 'text-gray-700'}>{selectedDoc.uploaded}</div>
                                         </div>
                                         
                                         {/* Documents List */}
                                         <div>
-                                            <div className="text-sm text-gray-600 mb-3 font-semibold">
+                                            <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-3 font-semibold`}>
                                                 Submitted Documents ({selectedDoc.documentCount})
                                             </div>
                                             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
                                                 {selectedDoc.documents.map((doc, index) => (
-                                                    <div key={doc.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                                    <div key={doc.id} className={`p-3 ${darkMode ? 'bg-[#141b2d] border-gray-700' : 'bg-gray-50 border-gray-200'} rounded-lg border`}>
                                                         <div className="flex items-start justify-between mb-2">
                                                             <div className="flex-1">
-                                                                <div className="font-semibold text-gray-800 text-sm mb-1">
+                                                                <div className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-800'} text-sm mb-1`}>
                                                                     {index + 1}. {doc.name}
                                                                 </div>
-                                                                <div className="text-xs text-gray-600">{doc.fileName}</div>
-                                                                <div className="text-xs text-gray-500 mt-1">{doc.size}</div>
+                                                                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{doc.fileName}</div>
+                                                                <div className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'} mt-1`}>{doc.size}</div>
                                                             </div>
                                                             {doc.downloadUrl || doc.previewUrl !== '#' ? (
-                                                                <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">Available</span>
+                                                                <span className={`px-2 py-1 ${darkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700'} text-xs rounded-full`}>Available</span>
                                                             ) : (
-                                                                <span className="px-2 py-1 bg-gray-100 text-gray-500 text-xs rounded-full">N/A</span>
+                                                                <span className={`px-2 py-1 ${darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'} text-xs rounded-full`}>N/A</span>
                                                             )}
                                                         </div>
                                                         <div className="flex gap-2 mt-2">
                                                             <button
                                                                 onClick={() => handlePreview(doc)}
-                                                                className="flex-1 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 flex items-center justify-center"
+                                                                className={`flex-1 py-1.5 ${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded text-xs flex items-center justify-center`}
                                                                 title="Preview"
                                                             >
                                                                 <Eye size={12} className="mr-1" /> View
                                                             </button>
                                                             <button
                                                                 onClick={() => handleDownload(doc)}
-                                                                className="flex-1 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700 flex items-center justify-center"
+                                                                className={`flex-1 py-1.5 ${darkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-600 hover:bg-green-700'} text-white rounded text-xs flex items-center justify-center`}
                                                                 title="Download"
                                                             >
                                                                 <Download size={12} className="mr-1" /> Download
                                                             </button>
                                                             <button
                                                                 onClick={() => handlePrint(doc)}
-                                                                className="flex-1 py-1.5 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 flex items-center justify-center"
+                                                                className={`flex-1 py-1.5 ${darkMode ? 'bg-purple-600 hover:bg-purple-700' : 'bg-purple-600 hover:bg-purple-700'} text-white rounded text-xs flex items-center justify-center`}
                                                                 title="Print"
                                                             >
                                                                 <Printer size={12} className="mr-1" /> Print
@@ -523,29 +524,29 @@ const DocValidation = () => {
                                         <div className="space-y-3">
                                             <button
                                                 onClick={() => handleApprove(selectedDoc.id)}
-                                                className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold flex items-center justify-center"
+                                                className={`w-full py-3 ${darkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-600 hover:bg-green-700'} text-white rounded-lg font-bold flex items-center justify-center`}
                                             >
                                                 <CheckCircle className="mr-2" /> Approve All Documents
                                             </button>
                                             <button
                                                 onClick={() => handleReject(selectedDoc.id)}
-                                                className="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold flex items-center justify-center"
+                                                className={`w-full py-3 ${darkMode ? 'bg-red-600 hover:bg-red-700' : 'bg-red-600 hover:bg-red-700'} text-white rounded-lg font-bold flex items-center justify-center`}
                                             >
                                                 <XCircle className="mr-2" /> Reject Documents
                                             </button>
                                         </div>
                                     ) : (
-                                        <div className={`p-4 rounded-lg ${selectedDoc.status === 'approved' ? 'bg-green-50' : 'bg-red-50'}`}>
-                                            <div className="font-bold mb-2">
+                                        <div className={`p-4 rounded-lg ${selectedDoc.status === 'approved' ? (darkMode ? 'bg-green-500/20 border border-green-500/30' : 'bg-green-50 border border-green-200') : (darkMode ? 'bg-red-500/20 border border-red-500/30' : 'bg-red-50 border border-red-200')}`}>
+                                            <div className={`font-bold mb-2 ${selectedDoc.status === 'approved' ? (darkMode ? 'text-green-400' : 'text-green-700') : (darkMode ? 'text-red-400' : 'text-red-700')}`}>
                                                 {selectedDoc.status === 'approved' ? '✅ Approved' : '❌ Rejected'}
                                             </div>
                                             {selectedDoc.status === 'approved' ? (
-                                                <div className="text-sm">
+                                                <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                                                     By: {selectedDoc.approvedBy}<br />
                                                     At: {selectedDoc.approvedAt}
                                                 </div>
                                             ) : (
-                                                <div className="text-sm">
+                                                <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                                                     Reason: {selectedDoc.reason}<br />
                                                     By: {selectedDoc.rejectedBy}<br />
                                                     At: {selectedDoc.rejectedAt}
