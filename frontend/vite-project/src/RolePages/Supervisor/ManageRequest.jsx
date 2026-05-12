@@ -229,7 +229,18 @@ const ManageRequest = () => {
                                             </div>
                                             <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-2`}>{request.customer}</div>
                                             <div className="flex justify-between items-center">
-                                                <span className={`text-sm ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>{request.submitted}</span>
+                                                <div className="flex flex-col">
+                                                    <span className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>{request.submitted}</span>
+                                                    <span className={`text-xs ${darkMode ? 'text-gray-600' : 'text-gray-400'}`}>
+                                                        {new Date(request.createdAt).toLocaleString('en-US', {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            year: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        })}
+                                                    </span>
+                                                </div>
                                                 <ChevronRight size={16} className={darkMode ? 'text-cyan-400' : 'text-blue-500'} />
                                             </div>
                                         </div>
@@ -267,13 +278,13 @@ const ManageRequest = () => {
                                     <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Assign Technician</h2>
                                     <div className={`${darkMode ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-blue-50 border-blue-100'} p-4 rounded-lg mb-6 border`}>
                                         <h3 className={`font-bold mb-3 flex items-center ${darkMode ? 'text-cyan-400' : 'text-blue-800'}`}>
-                                            <Info size={18} className="mr-2" /> Customer Details
+                                            <Info size={18} className="mr-2" /> Request Details
                                         </h3>
                                         <div className="space-y-2 text-sm">
                                             <div className="flex items-start">
                                                 <User size={16} className={`mr-2 mt-0.5 ${darkMode ? 'text-cyan-400' : 'text-blue-600'}`} />
                                                 <div>
-                                                    <span className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} block`}>Full Name</span>
+                                                    <span className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} block`}>Customer Name</span>
                                                     <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-800'}`}>{selectedRequest.customer}</span>
                                                 </div>
                                             </div>
@@ -287,12 +298,31 @@ const ManageRequest = () => {
                                             <div className="flex items-start">
                                                 <MapPin size={16} className={`mr-2 mt-0.5 ${darkMode ? 'text-cyan-400' : 'text-blue-600'}`} />
                                                 <div>
-                                                    <span className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} block`}>Address Info</span>
+                                                    <span className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} block`}>Address</span>
                                                     <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-800'}`}>
                                                         {selectedRequest.city}, {selectedRequest.woreda}, {selectedRequest.kebele}
                                                     </span>
                                                     <span className={`${darkMode ? 'text-gray-500' : 'text-gray-600'} block text-xs mt-1`}>
                                                         {selectedRequest.location}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-start">
+                                                <Clock size={16} className={`mr-2 mt-0.5 ${darkMode ? 'text-cyan-400' : 'text-blue-600'}`} />
+                                                <div>
+                                                    <span className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} block`}>Submitted</span>
+                                                    <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-800'}`}>
+                                                        {new Date(selectedRequest.createdAt).toLocaleString('en-US', {
+                                                            weekday: 'short',
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            year: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        })}
+                                                    </span>
+                                                    <span className={`${darkMode ? 'text-gray-500' : 'text-gray-600'} block text-xs`}>
+                                                        ({selectedRequest.submitted})
                                                     </span>
                                                 </div>
                                             </div>

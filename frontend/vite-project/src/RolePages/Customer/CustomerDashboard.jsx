@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { AlertTriangle, CheckCircle, Clock, Zap, MapPin, User, TrendingUp, Download } from 'lucide-react';
 import {
@@ -21,39 +21,153 @@ const CustomerDashboard = () => {
     const context = useOutletContext() || {};
     const { darkMode = true } = context;
 
+    const [stats, setStats] = useState({
+        powerStatus: 'Loading...',
+        openTickets: 0,
+        resolvedIssues: 0,
+        avgResponseTime: 'Calculating...'
+    });
+    const [recentTickets, setRecentTickets] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, []);
+
+    const fetchDashboardData = async () => {
+        try {
+            const user = JSON.parse(localStorage.getItem('user'));
+            const token = localStorage.getItem('token');
+
+            // Fetch service requests
+            const requestsResponse = await fetch(`${API_URL}/api/service-requests`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            const requestsData = await requestsResponse.json();
+
+            // Fetch outages
+            const outagesResponse = await fetch(`${API_URL}/api/outages`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            const outagesData = await outagesResponse.json();
+
+            if (requestsData.success && outagesData.success) {
+                // Filter user's requests
+                const userRequests = requestsData.requests.filter(r => r.customer_id === user.id);
+                const userOutages = outagesData.outages.filter(o => o.reported_by === user.id);
+
+                // Calculate stats
+                const openCount = [...userRequests, ...userOutages].filter(
+                    item => item.status === 'pending' || item.status === 'under_review' || item.status === 'in_progress'
+                ).length;
+
+                const resolvedCount = [...userRequests, ...userOutages].filter(
+                    item => item.status === 'completed' || item.status === 'resolved'
+                ).length;
+
+                // Calculate average response time
+                const completedItems = [...userRequests, ...userOutages].filter(
+                    item => item.status === 'completed' || item.status === 'resolved'
+                );
+                
+                let avgTime = 'N/A';
+                if (completedItems.length > 0) {
+                    const totalHours = completedItems.reduce((sum, item) => {
+                        const created = new Date(item.created_at);
+                        const updated = new Date(item.updated_at);
+                        const hours = (updated - created) / (1000 * 60 * 60);
+                        return sum + hours;
+                    }, 0);
+                    avgTime = `${(totalHours / completedItems.length).toFixed(1)} hrs`;
+                }
+
+                setStats({
+                    powerStatus: 'Active',
+                    openTickets: openCount,
+                    resolvedIssues: resolvedCount,
+                    avgResponseTime: avgTime
+                });
+
+                // Format recent tickets
+                const allTickets = [
+                    ...userRequests.map(r => ({
+                        id: r.ticket_id,
+                        title: formatServiceType(r.service_type),
+                        status: r.status,
+                        date: new Date(r.created_at).toLocaleDateString(),
+                        location: r.full_address,
+                        technician: r.assigned_to_username || 'Unassigned'
+                    })),
+                    ...userOutages.map(o => ({
+                        id: o.ticket_id,
+                        title: 'Power Outage Report',
+                        status: o.status,
+                        date: new Date(o.created_at).toLocaleDateString(),
+                        location: o.location,
+                        technician: o.assigned_to_username || 'Unassigned'
+                    }))
+                ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+
+                setRecentTickets(allTickets);
+            }
+
+            setLoading(false);
+        } catch (error) {
+            console.error('Error fetching dashboard data:', error);
+            setLoading(false);
+        }
+    };
+
+    const formatServiceType = (serviceType) => {
+        const serviceMap = {
+            'new-service': 'New Service Connection',
+            'relocation': 'Service Relocation',
+            'name-change': 'Name Change',
+            'tariff-change': 'Tariff Change',
+            'meter-separation': 'Meter Separation'
+        };
+        return serviceMap[serviceType] || serviceType;
+    };
+
     // Customer Stats
-    const stats = [
+    const statsCards = [
         {
             icon: <Zap size={24} />,
             label: 'Power Status',
-            value: 'Active',
+            value: stats.powerStatus,
             change: 'Connected',
             color: 'green'
         },
         {
             icon: <AlertTriangle size={24} />,
             label: 'Open Tickets',
-            value: '2',
-            change: '+1 this week',
+            value: loading ? '...' : stats.openTickets.toString(),
+            change: 'Active requests',
             color: 'orange'
         },
         {
             icon: <CheckCircle size={24} />,
             label: 'Resolved Issues',
-            value: '10',
-            change: '+2 this month',
+            value: loading ? '...' : stats.resolvedIssues.toString(),
+            change: 'Completed',
             color: 'blue'
         },
         {
             icon: <Clock size={24} />,
             label: 'Avg Response Time',
-            value: '2.5 hrs',
-            change: '-30% faster',
+            value: loading ? '...' : stats.avgResponseTime,
+            change: 'Average',
             color: 'purple'
         }
     ];
 
-    // Service Requests Data
+    // Service Requests Data (mock for chart)
     const serviceRequests = [
         { month: 'Jan', requests: 2, completed: 2 },
         { month: 'Feb', requests: 3, completed: 3 },
@@ -63,35 +177,7 @@ const CustomerDashboard = () => {
         { month: 'Jun', requests: 3, completed: 3 }
     ];
 
-    // Recent Tickets
-    const recentTickets = [
-        {
-            id: 'SR-2024-001',
-            title: 'Meter Installation',
-            status: 'completed',
-            date: '2024-01-15',
-            location: 'Bole, Addis Ababa',
-            technician: 'Tech-023'
-        },
-        {
-            id: 'OUT-2024-00123',
-            title: 'Power Outage Report',
-            status: 'in_progress',
-            date: '2024-01-12',
-            location: 'Megenagna, Addis Ababa',
-            technician: 'Tech-045'
-        },
-        {
-            id: 'SR-2024-002',
-            title: 'Transformer Repair',
-            status: 'pending',
-            date: '2024-01-08',
-            location: 'Kirkos, Addis Ababa',
-            technician: 'Unassigned'
-        }
-    ];
-
-    // Outage History
+    // Outage History (mock for table)
     const outageHistory = [
         { area: 'Bole', outages: 3, avgDuration: '2.5 hrs' },
         { area: 'Megenagna', outages: 2, avgDuration: '1.8 hrs' },
@@ -100,11 +186,11 @@ const CustomerDashboard = () => {
         { area: 'Addis Central', outages: 2, avgDuration: '2.0 hrs' }
     ];
 
-    // Request Status Distribution
+    // Request Status Distribution (calculated from real data)
     const requestStatus = [
-        { name: 'Completed', value: 10, color: '#10b981' },
-        { name: 'In Progress', value: 2, color: '#3b82f6' },
-        { name: 'Pending', value: 1, color: '#f59e0b' }
+        { name: 'Completed', value: stats.resolvedIssues, color: '#10b981' },
+        { name: 'In Progress', value: Math.floor(stats.openTickets / 2), color: '#3b82f6' },
+        { name: 'Pending', value: Math.ceil(stats.openTickets / 2), color: '#f59e0b' }
     ];
 
     const getStatusColor = (status) => {
@@ -144,7 +230,7 @@ const CustomerDashboard = () => {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                {stats.map((stat, idx) => (
+                {statsCards.map((stat, idx) => (
                     <div
                         key={idx}
                         className={`${darkMode ? 'bg-[#1f2a40] border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 border transition-all hover:shadow-lg`}

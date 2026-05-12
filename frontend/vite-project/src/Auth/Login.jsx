@@ -12,6 +12,19 @@ const Login = () => {
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+    // Test credentials
+    const testAccounts = [
+        { role: 'Admin', email: 'admin@powerlink.com', password: 'Admin@123', color: 'bg-purple-100 border-purple-300 text-purple-700' },
+        { role: 'Customer', email: 'customer@powerlink.com', password: 'Customer@123', color: 'bg-blue-100 border-blue-300 text-blue-700' },
+        { role: 'Supervisor', email: 'supervisor@powerlink.com', password: 'Supervisor@123', color: 'bg-green-100 border-green-300 text-green-700' },
+        { role: 'Technician', email: 'technician@powerlink.com', password: 'Technician@123', color: 'bg-orange-100 border-orange-300 text-orange-700' }
+    ];
+
+    const fillCredentials = (email, password) => {
+        setLoginData({ email, password });
+        setErrors({});
+    };
+
     const handleLogin = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -87,13 +100,23 @@ const Login = () => {
                     <p className="text-gray-600 text-sm">Access your account</p>
                 </div>
 
-                {/* Test Credentials Info */}
-                <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg mb-4">
-                    <p className="text-blue-800 text-xs font-semibold mb-2">Test Credentials:</p>
-                    <div className="text-xs text-blue-700 space-y-1">
-                        <div><strong>Admin:</strong> admin@system.com / SuperAdmin123!</div>
-                        <div><strong>Create new account:</strong> Use Register button</div>
+                {/* Test Credentials - Clickable */}
+                <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 p-4 rounded-lg mb-4">
+                    <p className="text-gray-800 text-sm font-bold mb-3 text-center">Quick Login - Test Accounts</p>
+                    <div className="grid grid-cols-2 gap-2">
+                        {testAccounts.map((account) => (
+                            <button
+                                key={account.role}
+                                type="button"
+                                onClick={() => fillCredentials(account.email, account.password)}
+                                className={`${account.color} border-2 p-2 rounded-lg text-xs font-semibold hover:scale-105 transition-transform cursor-pointer`}
+                            >
+                                <div className="font-bold">{account.role}</div>
+                                <div className="text-[10px] opacity-75 mt-1">{account.email}</div>
+                            </button>
+                        ))}
                     </div>
+                    <p className="text-gray-600 text-[10px] text-center mt-2">Click any role to auto-fill credentials</p>
                 </div>
 
                 <form onSubmit={handleLogin} className="space-y-3">
